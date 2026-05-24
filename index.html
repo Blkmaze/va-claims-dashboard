@@ -482,7 +482,7 @@ function renderOverview(v){
 }
 function buildSuggestions(v){
   const out=[];
-  if(v.combined>=95&&v.pt!=='yes')out.push({type:'green',icon:'⚡',title:'P&T Possible',body:'Combined rating e95%. Consider filing for Permanent & Total status under 38 CFR § 3.951(b).'});
+  if(v.combined>=95&&v.pt!=='yes')out.push({type:'green',icon:'⚡',title:'P&T Possible',body:'Combined rating ≥95%. Consider filing for Permanent & Total status under 38 CFR § 3.951(b).'});
   if(v.combined>=60&&(!v.smc||v.smc==='none'))out.push({type:'blue',icon:'=',title:'SMC-K Potential',body:'Check for anatomical losses (DC 7522, 6260 bilateral) that qualify for SMC-K add-on under 38 U.S.C. § 1114(k).'});
   if(v.pt==='yes'&&(!v.smc||!v.smc.includes('S')))out.push({type:'blue',icon:'=',title:'SMC-S Eligibility',body:'100% P&T may qualify for SMC-S (Housebound) if an additional 60%+ exists separately.'});
   if(v.pt==='yes'&&v.smc&&v.smc.includes('S')&&!v.smc.includes('L'))out.push({type:'amber',icon:'<',title:'SMC-L Upgrade Path',body:'SMC-S active. Aid & Attendance (SMC-L) upgrade available via Form 21-2680 from treating physician under 38 CFR § 3.352(a).'});
@@ -514,9 +514,9 @@ function renderSMC(v){
   document.getElementById('smc-agent-box').innerHTML='<span class="agent-dot"></span><strong style="color:var(--blue)">Agent SMC Assessment</strong><br>'+buildSMCAssessment(v);
 }
 function buildSMCAssessment(v){
-  if(v.combined===100&&v.pt==='yes'&&!v.smc?.includes('L'))return'Strong candidate for SMC-L (Aid & Attendance) upgrade. With '+(v.conditions?.filter(c=>c.pct>=20).length||0)+' conditions rated e20%, the functional impairment argument is supported. Critical next step: Form 21-2680 from treating physician (38 CFR § 3.352(a)).';
+  if(v.combined===100&&v.pt==='yes'&&!v.smc?.includes('L'))return'Strong candidate for SMC-L (Aid & Attendance) upgrade. With '+(v.conditions?.filter(c=>c.pct>=20).length||0)+' conditions rated ≥20%, the functional impairment argument is supported. Critical next step: Form 21-2680 from treating physician (38 CFR § 3.352(a)).';
   if(v.combined===100&&v.pt==='yes'&&v.smc?.includes('L'))return'SMC-L active. Monitor for SMC-M eligibility if additional extremity losses documented.';
-  if(v.combined>=95)return'Combined rating e95% — borderline P&T. Push for P&T rating first, then SMC-S (Housebound) as next milestone.';
+  if(v.combined>=95)return'Combined rating ≥95% — borderline P&T. Push for P&T rating first, then SMC-S (Housebound) as next milestone.';
   return'Focus on reaching 100% combined before SMC tier escalation.';
 }
 function renderActions(v){
