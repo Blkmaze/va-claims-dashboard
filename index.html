@@ -547,6 +547,7 @@ function closeClaimWizard(){document.getElementById('claim-wizard-modal').classL
 function selectWizardType(el){wizardData.type=el.textContent;el.parentElement.querySelectorAll("div").forEach(function(d){d.style.borderColor="var(--border)"});el.style.borderColor="var(--blue-b)"}
 function selectWizardType(el){wizardData.type=el.textContent;el.parentElement.querySelectorAll("div").forEach(function(x){x.style.borderColor="var(--border)"});el.style.borderColor="var(--blue-b)"}
 function selectWizardType(el){wizardData.type=el.textContent;el.parentElement.querySelectorAll("div").forEach(function(x){x.style.borderColor="var(--border)"});el.style.borderColor="var(--blue-b)"}
+function selectWizardType(el){wizardData.type=el.textContent;el.parentElement.querySelectorAll("div").forEach(function(x){x.style.borderColor="var(--border)"});el.style.borderColor="var(--blue-b)"}
 function renderWizard(){
   const prog=document.getElementById('wizard-progress');
   prog.innerHTML=WIZARD_STEPS.map((_,i)=>'<div class="wstep '+(i<wizardStep?'done':i===wizardStep?'active':'')+'"></div>').join('');
@@ -609,7 +610,7 @@ async function generateStatement(){
   const out=document.getElementById('st-output');out.classList.remove('open');out.textContent='';
   const typeLabels={personal:'Personal Statement in Support of Claim (VA Form 21-4138)',buddy:'Buddy Statement (Lay Evidence)',nexus:'Nexus Letter (draft for physician)',cp_prep:'C&P Exam Preparation Notes',smc_l:'SMC-L Aid & Attendance Narrative',nod:'Notice of Disagreement Response',itf:'Intent to File Memo'};
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'You are a VA claims specialist who writes professional statements for veterans. Use this veteran's SPECIFIC records only. Write in clear paragraphs, no markdown headers or bullets, ready to print and sign.',messages:[{role:'user',content:'Write a '+typeLabels[type]+' for:\n'+buildVetContext(v)+'\nTarget condition: '+condition+'\n'+(author?'Author (buddy): '+author+'\n':'')+(context?'Additional context: '+context+'\n':'')+'\nMake it specific, credible, and legally grounded using CFR citations where appropriate.'}]})});
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'You are a VA claims specialist who writes professional statements for veterans. Use this veteran\'s SPECIFIC records only. Write in clear paragraphs, no markdown headers or bullets, ready to print and sign.',messages:[{role:'user',content:'Write a '+typeLabels[type]+' for:\n'+buildVetContext(v)+'\nTarget condition: '+condition+'\n'+(author?'Author (buddy): '+author+'\n':'')+(context?'Additional context: '+context+'\n':'')+'\nMake it specific, credible, and legally grounded using CFR citations where appropriate.'}]})});
     const data=await res.json();
     const text=data.content?.[0]?.text||'Error.';
     out.textContent=text;out.classList.add('open');
