@@ -145,90 +145,49 @@ select option{background:var(--bg2)}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
-@media(max-width:800px){
-  .sidebar{width:200px}
-  .main{margin-left:200px}
-  .metric-grid{grid-template-columns:repeat(2,1fr)}
-  .igrid2,.igrid3{grid-template-columns:1fr}
-}
+@media(max-width:800px){.sidebar{width:200px}.main{margin-left:200px}.metric-grid{grid-template-columns:repeat(2,1fr)}.igrid2,.igrid3{grid-template-columns:1fr}}
 </style>
 </head>
-<div style="padding:10px 14px;border-top:1px solid var(--border)" id="va-auth-panel">
-  <div id="va-auth-status" style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:6px">VA.gov — Not connected</div>
-  <button id="va-login-btn" class="btn btn-blue" style="width:100%;font-size:10px;padding:6px" onclick="vaLogin()">🔐 Login with VA.gov</button>
-  <button id="va-logout-btn" class="btn btn-gray" style="width:100%;font-size:10px;padding:6px;display:none" onclick="vaLogout()">Disconnect VA.gov</button>
-  <button id="va-sync-btn" class="btn btn-green" style="width:100%;font-size:10px;padding:6px;margin-top:4px;display:none" onclick="vaSyncVet()">⟳ Sync from VA.gov</button>
-</div>
-
-<script>
-const VA_CLIENT_ID='0oa1bdltniuXCsMDG2p8';
-const VA_REDIRECT_URI='https://blkmaze.github.io/va-claims-dashboard/';
-const VA_AUTH_URL='https://sandbox-api.va.gov/oauth2/veteran-service-history-and-eligibility/v1/authorization';
-const VA_TOKEN_URL='https://sandbox-api.va.gov/oauth2/veteran-service-history-and-eligibility/v1/token';
-const VA_API_BASE='https://sandbox-api.va.gov/services/veteran_verification/v2';
-function randomString(len){const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';return Array.from(crypto.getRandomValues(new Uint8Array(len))).map(b=>chars[b%chars.length]).join('');}
-async function sha256b(plain){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(plain));}
-function b64url(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
-async function vaLogin(){const cv=randomString(64);const ch=b64url(await sha256b(cv));const st=randomString(16);sessionStorage.setItem('va_cv',cv);sessionStorage.setItem('va_st',st);window.location.href=VA_AUTH_URL+'?'+new URLSearchParams({client_id:VA_CLIENT_ID,redirect_uri:VA_REDIRECT_URI,response_type:'code',scope:'service_history.read disability_rating.read veteran_status.read',state:st,code_challenge:ch,code_challenge_method:'S256'});}
-async function vaHandleCallback(){const p=new URLSearchParams(window.location.search);const code=p.get('code');if(!code)return;if(p.get('state')!==sessionStorage.getItem('va_st'))return;try{const r=await fetch(VA_TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',client_id:VA_CLIENT_ID,redirect_uri:VA_REDIRECT_URI,code,code_verifier:sessionStorage.getItem('va_cv')})});const t=await r.json();if(t.access_token){localStorage.setItem('va_access_token',t.access_token);localStorage.setItem('va_token_expiry',Date.now()+(t.expires_in*1000));sessionStorage.removeItem('va_cv');sessionStorage.removeItem('va_st');window.history.replaceState({},document.title,VA_REDIRECT_URI);vaUpdateUI(true);showVAAlert('VA.gov connected! Click Sync.','green');}else showVAAlert('Login failed: '+(t.error_description||t.error),'red');}catch(e){showVAAlert('Error: '+e.message,'red');}}
-async function vaSyncVet(){const token=localStorage.getItem('va_access_token');if(!token){showVAAlert('Login with VA.gov first.','amber');return;}const v=getActive();if(!v){showVAAlert('Select a veteran first.','amber');return;}const btn=document.getElementById('va-sync-btn');btn.textContent='Syncing...';btn.disabled=true;try{const[rR,hR]=await Promise.all([fetch(VA_API_BASE+'/disability_rating',{headers:{Authorization:'Bearer '+token}}),fetch(VA_API_BASE+'/service_history',{headers:{Authorization:'Bearer '+token}})]);const[rD,hD]=await Promise.all([rR.json(),hR.json()]);if(rD.data?.attributes){const a=rD.data.attributes;v.combined=a.combined_disability_rating||v.combined;const ir=a.individual_ratings||[];if(ir.length)v.conditions=ir.map((r,i)=>({id:'va_'+i,cond:r.diagnostic_text||'Unknown',pct:r.rating_percentage||0,dc:r.diagnostic_code?'DC '+r.diagnostic_code:'—',eff:r.effective_date?new Date(r.effective_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—',bilateral:(r.diagnostic_text||'').toLowerCase().includes('bilateral'),flag:r.static_ind==='Y'?'P&T':'',speculated:r.rating_percentage||0}));}if(hD.data?.length){const s=hD.data[0].attributes;v.branch=s.branch_of_service||v.branch;v.service=(s.start_date?new Date(s.start_date).getFullYear():'')+'–'+(s.end_date?new Date(s.end_date).getFullYear():'Present');}v.vaLastSync=new Date().toLocaleString();saveVets(veterans);renderSidebar();renderWorkspace();showVAAlert('Synced — '+v.combined+'% combined, '+(v.conditions?.length||0)+' conditions.','green');}catch(e){showVAAlert('Sync error: '+e.message,'red');}btn.textContent='⟳ Sync from VA.gov';btn.disabled=false;}
-function vaLogout(){localStorage.removeItem('va_access_token');localStorage.removeItem('va_token_expiry');vaUpdateUI(false);}
-function vaUpdateUI(on){const lb=document.getElementById('va-login-btn'),lo=document.getElementById('va-logout-btn'),sy=document.getElementById('va-sync-btn'),st=document.getElementById('va-auth-status');if(!lb)return;lb.style.display=on?'none':'block';lo.style.display=on?'block':'none';sy.style.display=on?'block':'none';st.style.color=on?'var(--green)':'var(--text3)';st.textContent=on?'✓ VA.gov connected':'VA.gov — Not connected';}
-function showVAAlert(msg,type){const el=document.createElement('div');el.className='alert alert-'+type;el.style.cssText='position:fixed;bottom:20px;right:20px;z-index:999;max-width:360px;animation:fadeIn 0.3s ease';el.innerHTML='<span>'+(type==='green'?'✓':type==='red'?'✕':'⚠')+'</span><div>'+msg+'</div>';document.body.appendChild(el);setTimeout(()=>el.remove(),5000);}
-(function(){const p=new URLSearchParams(window.location.search);if(p.get('code'))vaHandleCallback();const t=localStorage.getItem('va_access_token'),e=localStorage.getItem('va_token_expiry');vaUpdateUI(!!(t&&e&&Date.now()<+e));})();
-</script>
 <body>
 <div class="scanline"></div>
-
-<!-- SIDEBAR -->
 <div class="sidebar">
-  <div class="sidebar-logo">
-    <h1>// VA Claims Mgr</h1>
-    <p>VSO Multi-Veteran System</p>
-  </div>
+  <div class="sidebar-logo"><h1>// VA Claims Mgr</h1><p>VSO Multi-Veteran System</p></div>
   <div class="sidebar-section">Veterans</div>
   <div id="vet-list"></div>
   <button class="add-vet-btn" onclick="openAddVet()">+ Add Veteran</button>
   <div style="flex:1"></div>
-  <div style="padding:12px 14px;border-top:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--text3)">
-    Data stored locally · localStorage<br>
-    Agent powered by Claude Sonnet<br><br>
-    <label style="color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Anthropic API Key</label>
-    <input type="password" id="api-key-input"
-      placeholder="sk-ant-..."
-      style="width:100%;margin-top:5px;font-size:10px;padding:5px 7px;background:var(--bg3);border:1px solid var(--border2);border-radius:2px;color:var(--text);font-family:var(--mono);outline:none"
-      oninput="localStorage.setItem('vso_api_key',this.value)"
-    />
-    <div id="api-key-status" style="font-size:9px;margin-top:3px;color:var(--text3)">Not set</div>
+  <div style="padding:8px 14px 4px">
+    <button id="va-login-btn" class="btn btn-blue" onclick="vaLogin()" style="width:100%;font-size:11px">&#128272; Login with VA.gov</button>
+    <div id="va-status" style="font-size:9px;color:var(--text3);margin-top:3px;text-align:center"></div>
   </div>
-</div>
-
-<!-- MAIN -->
-<div class="main">
+  <div style="padding:12px 14px;border-top:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--text3)">
+    Data stored locally &middot; localStorage<br>Agent powered by Claude Sonnet
+    <div style="margin-top:8px">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.06em">Anthropic API Key</div>
+      <input type="password" id="api-key-input" placeholder="sk-ant-..." style="font-size:10px;padding:4px 8px;width:100%" oninput="saveApiKey(this.value)" />
+      <div id="api-key-status" style="font-size:9px;margin-top:2px;color:var(--text3)">Not set</div>
+    </div>
+  </div>
+</div><div class="main">
   <div class="topbar" id="topbar">
     <div class="topbar-vet">
       <div id="topbar-avatar" style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:500;flex-shrink:0;background:var(--bg3);color:var(--text3)">?</div>
-      <div>
-        <div class="topbar-name" id="topbar-name">Select a Veteran</div>
-        <div class="topbar-meta" id="topbar-meta">No veteran selected</div>
-      </div>
+      <div><div class="topbar-name" id="topbar-name">Select a Veteran</div><div class="topbar-meta" id="topbar-meta">No veteran selected</div></div>
     </div>
     <div class="topbar-pills" id="topbar-pills"></div>
     <div class="topbar-actions">
       <button class="btn btn-green" onclick="openClaimWizard()">+ File Claim</button>
-      <button class="btn btn-blue" onclick="openPayCalc()">💰 Pay Calc</button>
-      <button class="btn btn-purple" onclick="openStackModal()">🔗 Stacking</button>
+      <button class="btn btn-blue" onclick="openPayCalc()">&#128176; Pay Calc</button>
+      <button class="btn btn-purple" onclick="openStackModal()">&#128279; Stacking</button>
       <button class="btn btn-gray" onclick="editCurrentVet()">Edit Profile</button>
     </div>
   </div>
-
   <div class="content" id="main-content">
     <div class="welcome" id="welcome-screen">
       <h2>// VA Claims Manager</h2>
       <p>Select a veteran from the sidebar or add a new one to get started. Every veteran has their own independent profile, claims, payment calculator, stacking analysis, and statement builder.</p>
       <button class="btn btn-blue" onclick="openAddVet()">+ Add First Veteran</button>
     </div>
-
     <div id="vet-workspace" style="display:none">
       <div class="tabs">
         <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
@@ -236,21 +195,16 @@ function showVAAlert(msg,type){const el=document.createElement('div');el.classNa
         <button class="tab-btn" onclick="showTab('claims')">Claims</button>
         <button class="tab-btn" onclick="showTab('appointments')">Appointments</button>
         <button class="tab-btn" onclick="showTab('smc')">SMC</button>
-        <button class="tab-btn" onclick="showTab('agent')">⚡ Agent</button>
-        <button class="tab-btn" onclick="showTab('statements')">📄 Statements</button>
+        <button class="tab-btn" onclick="showTab('agent')">&#9889; Agent</button>
+        <button class="tab-btn" onclick="showTab('statements')">&#128196; Statements</button>
         <button class="tab-btn" onclick="showTab('actions')">Actions</button>
       </div>
-
       <div id="tab-overview" class="panel active">
         <div class="metric-grid" id="ov-metrics"></div>
-        <div class="sec">Active Claims</div>
-        <div class="card" id="ov-claims-table"></div>
-        <div class="sec">Evidence on File</div>
-        <div class="card" id="ov-evidence"></div>
-        <div class="sec">Context-Aware Suggestions</div>
-        <div id="ov-suggestions"></div>
+        <div class="sec">Active Claims</div><div class="card" id="ov-claims-table"></div>
+        <div class="sec">Evidence on File</div><div class="card" id="ov-evidence"></div>
+        <div class="sec">Context-Aware Suggestions</div><div id="ov-suggestions"></div>
       </div>
-
       <div id="tab-conditions" class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <div style="font-size:13px;color:var(--text2)">All service-connected conditions for this veteran</div>
@@ -260,7 +214,6 @@ function showVAAlert(msg,type){const el=document.createElement('div');el.classNa
         <div class="sec">Add / Edit Condition</div>
         <div class="card" id="condition-form-wrap" style="display:none"></div>
       </div>
-
       <div id="tab-claims" class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <div style="font-size:13px;color:var(--text2)">Claim pipeline for this veteran</div>
@@ -268,7 +221,6 @@ function showVAAlert(msg,type){const el=document.createElement('div');el.classNa
         </div>
         <div id="claims-list"></div>
       </div>
-
       <div id="tab-appointments" class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <div style="font-size:13px;color:var(--text2)">Upcoming and past appointments</div>
@@ -276,41 +228,32 @@ function showVAAlert(msg,type){const el=document.createElement('div');el.classNa
         </div>
         <div class="card" id="appts-list"></div>
       </div>
-
       <div id="tab-smc" class="panel">
         <div class="metric-grid" style="grid-template-columns:repeat(2,1fr)" id="smc-metrics"></div>
-        <div class="sec">SMC Tier Analysis — 38 U.S.C. § 1114</div>
+        <div class="sec">SMC Tier Analysis &mdash; 38 U.S.C. &sect; 1114</div>
         <div class="card" id="smc-tier-list"></div>
-        <div class="sec">SMC-L Aid & Attendance Pathway</div>
+        <div class="sec">SMC-L Aid &amp; Attendance Pathway</div>
         <div class="card" id="smc-l-checklist"></div>
         <div id="smc-agent-box" class="agent-box open" style="margin-top:10px"></div>
       </div>
-
       <div id="tab-agent" class="panel">
-        <div class="alert alert-blue"><span>⚡</span><div>Type a condition name — the agent pulls matching details from this veteran's profile automatically. All speculations are scoped to this veteran only.</div></div>
+        <div class="alert alert-blue"><span>&#9889;</span><div>Enter any condition, evidence, or development. The agent speculates rating outcome using 38 CFR Part 4, USC citations, and this veteran's specific profile &mdash; not anyone else's.</div></div>
         <div class="card">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="agent-dot"></span><span style="font-family:var(--mono);font-size:11px;color:var(--blue)">// AGENT SPECULATION ENGINE</span></div>
           <div class="igrid2">
-            <div class="igroup" style="position:relative">
-              <label class="ilabel">Condition / Development</label>
-              <input type="text" id="ag-condition" placeholder="e.g. Kidney, Neuropathy, PTSD increase" oninput="agentAutoFill()" autocomplete="off" />
-              <div id="ag-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--blue-b);border-radius:0 0 4px 4px;z-index:50;max-height:160px;overflow-y:auto"></div>
-            </div>
-            <div class="igroup"><label class="ilabel">Diagnostic Code</label><input type="text" id="ag-dc" placeholder="Auto-filled from profile or enter manually" /></div>
-            <div class="igroup"><label class="ilabel">Claim Type</label><select id="ag-type"><option>New SC condition</option><option>Secondary to existing SC</option><option>Rating increase</option><option>SMC upgrade</option><option>C&P exam outcome</option></select></div>
-            <div class="igroup"><label class="ilabel">Secondary To</label><input type="text" id="ag-secondary" placeholder="Auto-filled or enter manually" /></div>
+            <div class="igroup"><label class="ilabel">Condition / Development</label><input type="text" id="ag-condition" placeholder="e.g. PTSD, Knee injury, Tinnitus" /></div>
+            <div class="igroup"><label class="ilabel">Diagnostic Code (if known)</label><input type="text" id="ag-dc" placeholder="e.g. DC 9411" /></div>
+            <div class="igroup"><label class="ilabel">Claim Type</label><select id="ag-type"><option>New SC condition</option><option>Secondary to existing SC</option><option>Rating increase</option><option>SMC upgrade</option><option>C&amp;P exam outcome</option></select></div>
+            <div class="igroup"><label class="ilabel">Secondary To</label><input type="text" id="ag-secondary" placeholder="e.g. Hypertension" /></div>
           </div>
-          <div class="igroup" style="margin-bottom:6px"><label class="ilabel">Evidence / Notes</label><textarea id="ag-notes" placeholder="Describe symptoms, exam findings, documents on file..."></textarea></div>
-          <div id="ag-pulled-context" style="display:none;background:var(--bg3);border:1px solid var(--green-b);border-radius:4px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:var(--green)"></div>
-          <button class="btn btn-blue" id="ag-btn" onclick="runAgentSpec()">⚡ Run Speculation</button>
+          <div class="igroup" style="margin-bottom:12px"><label class="ilabel">Evidence / Notes</label><textarea id="ag-notes" placeholder="Describe symptoms, exam findings, documents on file..."></textarea></div>
+          <button class="btn btn-blue" id="ag-btn" onclick="runAgentSpec()">&#9889; Run Speculation</button>
           <div class="agent-box" id="ag-output"><div id="ag-inner"></div></div>
         </div>
-        <div class="sec">Saved Speculations</div>
-        <div id="agent-saved-list"></div>
+        <div class="sec">Saved Speculations</div><div id="agent-saved-list"></div>
       </div>
-
       <div id="tab-statements" class="panel">
-        <div class="alert alert-blue"><span>📄</span><div>Generate ready-to-file statements pre-filled with this veteran's records. Each document is specific to this veteran — not shared with others.</div></div>
+        <div class="alert alert-blue"><span>&#128196;</span><div>Generate ready-to-file statements pre-filled with this veteran's records. Each document is specific to this veteran &mdash; not shared with others.</div></div>
         <div class="card">
           <div class="igrid2">
             <div class="igroup"><label class="ilabel">Statement Type</label>
@@ -318,8 +261,8 @@ function showVAAlert(msg,type){const el=document.createElement('div');el.classNa
                 <option value="personal">Personal Statement (VA Form 21-4138)</option>
                 <option value="buddy">Buddy Statement (Lay Evidence)</option>
                 <option value="nexus">Nexus Letter (draft for physician)</option>
-                <option value="cp_prep">C&P Exam Prep Notes</option>
-                <option value="smc_l">SMC-L Aid & Attendance Narrative</option>
+                <option value="cp_prep">C&amp;P Exam Prep Notes</option>
+                <option value="smc_l">SMC-L Aid &amp; Attendance Narrative</option>
                 <option value="nod">Notice of Disagreement Response</option>
                 <option value="itf">Intent to File Memo</option>
               </select>
@@ -327,19 +270,17 @@ function showVAAlert(msg,type){const el=document.createElement('div');el.classNa
             <div class="igroup"><label class="ilabel">Target Condition</label><input type="text" id="st-condition" placeholder="e.g. PTSD, Knee, Tinnitus" /></div>
           </div>
           <div class="igroup" style="margin-bottom:10px"><label class="ilabel">Additional Symptoms / Context</label><textarea id="st-context" placeholder="Specific symptoms, dates, functional impact..."></textarea></div>
-          <div class="igroup" style="margin-bottom:12px"><label class="ilabel">Author (buddy statement — blank if self)</label><input type="text" id="st-author" placeholder="e.g. James Carter, fellow veteran 2003–2007" /></div>
+          <div class="igroup" style="margin-bottom:12px"><label class="ilabel">Author (buddy statement &mdash; blank if self)</label><input type="text" id="st-author" placeholder="e.g. James Carter, fellow veteran 2003-2007" /></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-blue" id="st-btn" onclick="generateStatement()">📄 Generate Statement</button>
-            <button class="btn btn-amber" onclick="generateStrategy()">⚡ Claim Strategy</button>
+            <button class="btn btn-blue" id="st-btn" onclick="generateStatement()">&#128196; Generate Statement</button>
+            <button class="btn btn-amber" onclick="generateStrategy()">&#9889; Claim Strategy</button>
           </div>
           <div class="stmt-out" id="st-output"></div>
           <div id="st-copy-wrap" style="display:none;margin-top:8px"><button class="btn btn-gray" onclick="copyStmt()" style="font-size:10px;padding:4px 12px">Copy to clipboard</button></div>
           <div class="agent-box" id="strategy-box"><div id="strategy-inner"></div></div>
         </div>
-        <div class="sec">Saved Statements</div>
-        <div id="saved-statements-list"></div>
+        <div class="sec">Saved Statements</div><div id="saved-statements-list"></div>
       </div>
-
       <div id="tab-actions" class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <div style="font-size:13px;color:var(--text2)">Action checklist for this veteran</div>
@@ -349,41 +290,30 @@ function showVAAlert(msg,type){const el=document.createElement('div');el.classNa
       </div>
     </div>
   </div>
-</div>
-
-<!-- ADD/EDIT VETERAN MODAL -->
-<div class="overlay" id="add-vet-modal" onclick="if(event.target===this)closeAddVet()">
+</div><div class="overlay" id="add-vet-modal" onclick="if(event.target===this)closeAddVet()">
   <div class="modal" style="width:760px">
-    <button class="modal-close" onclick="closeAddVet()">✕ Close</button>
+    <button class="modal-close" onclick="closeAddVet()">&#10005; Close</button>
     <div class="modal-title" id="add-vet-title">// Add New Veteran</div>
     <div class="modal-sub">All fields are stored locally. Build the profile and the agent will use it for all speculations and statements.</div>
     <div class="igrid3">
       <div class="igroup"><label class="ilabel">Full Name</label><input type="text" id="nv-name" placeholder="First Last" /></div>
-      <div class="igroup"><label class="ilabel">Branch</label>
-        <select id="nv-branch"><option>Army</option><option>Navy</option><option>Marine Corps</option><option>Air Force</option><option>Space Force</option><option>Coast Guard</option></select>
-      </div>
+      <div class="igroup"><label class="ilabel">Branch</label><select id="nv-branch"><option>Army</option><option>Navy</option><option>Marine Corps</option><option>Air Force</option><option>Space Force</option><option>Coast Guard</option></select></div>
       <div class="igroup"><label class="ilabel">Era / Conflict</label><input type="text" id="nv-era" placeholder="e.g. OIF/OEF, Vietnam, Gulf War" /></div>
-      <div class="igroup"><label class="ilabel">Service Dates</label><input type="text" id="nv-service" placeholder="e.g. 2001–2009" /></div>
+      <div class="igroup"><label class="ilabel">Service Dates</label><input type="text" id="nv-service" placeholder="e.g. 2001-2009" /></div>
       <div class="igroup"><label class="ilabel">Current Combined %</label><input type="number" id="nv-combined" min="0" max="100" step="10" placeholder="e.g. 70" /></div>
-      <div class="igroup"><label class="ilabel">P&T Status</label>
-        <select id="nv-pt"><option value="no">Not P&T</option><option value="yes">P&T</option><option value="unknown">Unknown</option></select>
-      </div>
-      <div class="igroup"><label class="ilabel">SMC Level</label>
-        <select id="nv-smc"><option value="none">None</option><option value="K">SMC-K</option><option value="S">SMC-S</option><option value="S+K">SMC-S+K</option><option value="L">SMC-L</option><option value="L+K">SMC-L+K</option><option value="M">SMC-M</option></select>
-      </div>
-      <div class="igroup"><label class="ilabel">PACT Act Eligible</label>
-        <select id="nv-pact"><option value="unknown">Unknown</option><option value="yes">Yes</option><option value="no">No</option></select>
-      </div>
+      <div class="igroup"><label class="ilabel">P&amp;T Status</label><select id="nv-pt"><option value="no">Not P&amp;T</option><option value="yes">P&amp;T</option><option value="unknown">Unknown</option></select></div>
+      <div class="igroup"><label class="ilabel">SMC Level</label><select id="nv-smc"><option value="none">None</option><option value="K">SMC-K</option><option value="S">SMC-S</option><option value="S+K">SMC-S+K</option><option value="L">SMC-L</option><option value="L+K">SMC-L+K</option><option value="M">SMC-M</option></select></div>
+      <div class="igroup"><label class="ilabel">PACT Act Eligible</label><select id="nv-pact"><option value="unknown">Unknown</option><option value="yes">Yes</option><option value="no">No</option></select></div>
       <div class="igroup"><label class="ilabel">VSO Rep / File #</label><input type="text" id="nv-file" placeholder="e.g. DAV / C-file #12345" /></div>
     </div>
     <div class="igroup" style="margin-bottom:10px"><label class="ilabel">Service-Connected Conditions (one per line: Condition | % | DC | Effective Date)</label>
-      <textarea id="nv-conditions" style="min-height:100px" placeholder="PTSD | 70% | DC 9411 | March 2015&#10;Tinnitus | 10% | DC 5284 | March 2015&#10;Lumbar strain | 20% | DC 5237 | June 2018"></textarea>
+      <textarea id="nv-conditions" style="min-height:100px" placeholder="PTSD | 70% | DC 9411 | March 2015&#10;Tinnitus | 10% | DC 5284 | March 2015"></textarea>
     </div>
     <div class="igroup" style="margin-bottom:10px"><label class="ilabel">Evidence on File (one per line)</label>
-      <textarea id="nv-evidence" style="min-height:70px" placeholder="Buddy statement from John Smith&#10;IMO from Dr. Jones dated Jan 2025&#10;Service records showing IED exposure"></textarea>
+      <textarea id="nv-evidence" style="min-height:70px" placeholder="Buddy statement from John Smith&#10;IMO from Dr. Jones dated Jan 2025"></textarea>
     </div>
     <div class="igroup" style="margin-bottom:10px"><label class="ilabel">Pending / Notes</label>
-      <textarea id="nv-notes" style="min-height:60px" placeholder="Supplemental claim filed for knee, C&P scheduled June 2026..."></textarea>
+      <textarea id="nv-notes" style="min-height:60px" placeholder="Supplemental claim filed for knee, C&amp;P scheduled June 2026..."></textarea>
     </div>
     <div style="display:flex;gap:8px;margin-top:4px">
       <button class="btn btn-green" onclick="saveVeteran()">Save Veteran</button>
@@ -392,8 +322,425 @@ function showVAAlert(msg,type){const el=document.createElement('div');el.classNa
     </div>
   </div>
 </div>
-
-<!-- CLAIM FILING WIZARD -->
 <div class="overlay" id="claim-wizard-modal" onclick="if(event.target===this)closeClaimWizard()">
   <div class="modal" style="width:740px">
-    <button class="modal-close 
+    <button class="modal-close" onclick="closeClaimWizard()">&#10005; Close</button>
+    <div class="modal-title">// Claim Filing Wizard</div>
+    <div class="modal-sub" id="wizard-vet-name">Filing for: &mdash;</div>
+    <div class="wizard-progress" id="wizard-progress"></div>
+    <div id="wizard-body"></div>
+  </div>
+</div>
+<div class="overlay" id="pay-modal" onclick="if(event.target===this)closePayModal()">
+  <div class="modal" style="width:720px">
+    <button class="modal-close" onclick="closePayModal()">&#10005; Close</button>
+    <div class="modal-title">// Payment Calculator</div>
+    <div class="modal-sub" id="pay-vet-label">Calculating for: &mdash;</div>
+    <div class="sec">Conditions &mdash; adjust speculated post-C&amp;P ratings</div>
+    <div id="pay-conditions"></div>
+    <button class="btn btn-gray" style="font-size:10px;padding:4px 10px;margin-bottom:14px" onclick="addPayRow()">+ Add condition</button>
+    <div class="igrid2">
+      <div class="igroup"><label class="ilabel">Dependents</label>
+        <select id="pay-dep" onchange="calcPay()"><option value="0">Veteran alone</option><option value="sp">+ Spouse</option><option value="sp1">+ Spouse + 1 child</option><option value="sp2">+ Spouse + 2 children</option><option value="sp3">+ Spouse + 3+ children</option><option value="1c">+ 1 child (no spouse)</option></select>
+      </div>
+      <div class="igroup"><label class="ilabel">SMC Level</label>
+        <select id="pay-smc-sel" onchange="calcPay()"><option value="none">None</option><option value="k">SMC-K (+$139.87)</option><option value="s">SMC-S</option><option value="sk">SMC-S + K</option><option value="l">SMC-L (A&amp;A)</option><option value="lk">SMC-L + K</option><option value="m">SMC-M</option></select>
+      </div>
+    </div>
+    <div style="background:var(--bg3);border:1px solid var(--green-b);border-radius:4px;padding:16px;margin:12px 0">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Estimated Monthly</div>
+      <div class="pay-big" id="pay-total">$&mdash;</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:5px" id="pay-label">&mdash;</div>
+    </div>
+    <div id="pay-detail"></div>
+    <div class="alert alert-blue" style="margin-top:10px"><span>&#8505;</span><div style="font-size:11px">2024 VA rates. Actual payments depend on effective dates and VA decisions. Back pay from ITF date can be significant &mdash; file immediately for new conditions.</div></div>
+  </div>
+</div>
+<div class="overlay" id="stack-modal" onclick="if(event.target===this)closeStackModal()">
+  <div class="modal" style="width:740px">
+    <button class="modal-close" onclick="closeStackModal()">&#10005; Close</button>
+    <div class="modal-title">// Stacking Strategy</div>
+    <div class="modal-sub" id="stack-vet-label">Analyzing: &mdash;</div>
+    <div class="sec">Toggle conditions to include</div>
+    <div id="stack-chips" style="margin-bottom:14px"></div>
+    <button class="btn btn-purple" id="stack-btn" onclick="runStackAnalysis()">&#9889; Run Stacking Analysis</button>
+    <div class="agent-box" id="stack-output" style="margin-top:12px"><div id="stack-inner"></div></div>
+    <div class="sec" style="margin-top:16px">Key Rules</div>
+    <div class="strategy-box">38 CFR &sect; 4.14 &mdash; No pyramiding: same disability, one code only</div>
+    <div class="strategy-box g">38 CFR &sect; 3.310 &mdash; Secondary SC: conditions caused by SC disability stack separately</div>
+    <div class="strategy-box a">38 U.S.C. &sect; 1114 &mdash; SMC-K stacks ON TOP of any SMC level. S/L/M are mutually exclusive (highest wins)</div>
+    <div class="strategy-box">38 CFR &sect; 4.26 &mdash; Bilateral factor: 10% bonus for bilateral extremity conditions</div>
+  </div>
+</div>
+<div class="overlay" id="appt-modal" onclick="if(event.target===this)closeApptModal()">
+  <div class="modal" style="width:560px">
+    <button class="modal-close" onclick="closeApptModal()">&#10005; Close</button>
+    <div class="modal-title">// Add Appointment</div>
+    <div class="igrid2" style="margin-top:12px">
+      <div class="igroup"><label class="ilabel">Date</label><input type="date" id="ap-date" /></div>
+      <div class="igroup"><label class="ilabel">Type</label><select id="ap-type"><option>C&amp;P Exam</option><option>Primary Care</option><option>Specialty / Oncology</option><option>Mental Health</option><option>VSO Meeting</option><option>BVA Hearing</option><option>Other</option></select></div>
+      <div class="igroup"><label class="ilabel">Provider</label><input type="text" id="ap-provider" placeholder="e.g. QTC, VA Medical Center" /></div>
+      <div class="igroup"><label class="ilabel">Condition / Subject</label><input type="text" id="ap-condition" placeholder="e.g. Peripheral Neuropathy" /></div>
+    </div>
+    <div class="igroup" style="margin-bottom:12px"><label class="ilabel">Notes</label><textarea id="ap-notes" style="min-height:50px" placeholder="Prep notes, documents to bring..."></textarea></div>
+    <div class="igroup" style="margin-bottom:12px"><label class="ilabel">Exam Rating (1-5, after exam)</label>
+      <div style="display:flex;gap:4px;margin-top:4px" id="ap-scale">
+        <button class="btn btn-gray" style="flex:1;font-size:10px" onclick="setApptRating(1,this)">1 Poor</button>
+        <button class="btn btn-gray" style="flex:1;font-size:10px" onclick="setApptRating(2,this)">2 Fair</button>
+        <button class="btn btn-gray" style="flex:1;font-size:10px" onclick="setApptRating(3,this)">3 Avg</button>
+        <button class="btn btn-gray" style="flex:1;font-size:10px" onclick="setApptRating(4,this)">4 Good</button>
+        <button class="btn btn-gray" style="flex:1;font-size:10px" onclick="setApptRating(5,this)">5 Great</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px"><button class="btn btn-green" onclick="saveAppt()">Save Appointment</button><button class="btn btn-gray" onclick="closeApptModal()">Cancel</button></div>
+  </div>
+</div><script><script>
+function loadVets(){try{return JSON.parse(localStorage.getItem('vso_veterans')||'[]')}catch(e){return[]}}
+function saveVets(v){localStorage.setItem('vso_veterans',JSON.stringify(v))}
+function saveApiKey(v){localStorage.setItem('vso_api_key',v);const s=document.getElementById('api-key-status');if(s)s.textContent=v?'Key saved':'Not set'}
+function getApiKey(){return localStorage.getItem('vso_api_key')||''}
+let veterans=loadVets();
+let activeVetId=localStorage.getItem('vso_active')||null;
+let editingVetId=null;
+let apptRating=0;
+function getVet(id){return veterans.find(v=>v.id===id)}
+function getActive(){return getVet(activeVetId)}
+if(veterans.length===0){
+  veterans=[{id:'willie_mayes',name:'Willie Mayes',branch:'Army',era:'OIF/OEF',service:'2001-2012',combined:100,pt:'yes',smc:'S+K',pact:'yes',file:'Self / VSO',
+    conditions:[
+      {id:'c1',cond:'Posttraumatic Stress Disorder',pct:100,dc:'9411',eff:'Mar 7, 2012',bilateral:false,flag:'P&T'},
+      {id:'c2',cond:'Bilateral Flat Foot w/ left gout',pct:50,dc:'5276',eff:'Dec 20, 2022',bilateral:true,flag:''},
+      {id:'c3',cond:'Hypertensive Heart Disease',pct:30,dc:'7007',eff:'Dec 20, 2022',bilateral:false,flag:''},
+      {id:'c4',cond:'Prostate Cancer',pct:20,dc:'7528',eff:'Apr 1, 2024',bilateral:false,flag:'Pending',speculated:100},
+      {id:'c5',cond:'Hypertension',pct:20,dc:'7101',eff:'Jan 23, 2012',bilateral:false,flag:''},
+      {id:'c6',cond:'Bilateral Tinnitus',pct:10,dc:'5284',eff:'Mar 12, 2012',bilateral:true,flag:''},
+      {id:'c7',cond:'Erectile Dysfunction',pct:0,dc:'7522',eff:'Dec 20, 2022',bilateral:false,flag:'SMC-K'},
+      {id:'c8',cond:'Allergic Rhinitis',pct:0,dc:'---',eff:'Sep 14, 2022',bilateral:false,flag:''},
+      {id:'c9',cond:'Peripheral Neuropathy (bilateral lower)',pct:0,dc:'8520',eff:'Pending',bilateral:true,flag:'C&P Done',speculated:20},
+      {id:'c10',cond:'CKD (secondary to HTN)',pct:0,dc:'7541',eff:'Pending',bilateral:false,flag:'Filed',speculated:30},
+      {id:'c11',cond:'Voiding Dysfunction/Nocturia',pct:0,dc:'7542',eff:'Pending',bilateral:false,flag:'Filed',speculated:20}
+    ],
+    evidence:['PSMA PET scan - lymph node involvement confirmed','Urologist notes - documented spread','Statement in Support of Claim (faxed May 8, 2026)','Dr. Chhina Apr 14, 2026 - CKD documented, NSAIDs stopped','Form 21-2680 - PENDING Dr. Chhina'],
+    claims:[
+      {id:'cl1',name:'CKD + Voiding Dysfunction',type:'Secondary SC',filed:'May 10, 2026',claimNum:'128088405',step:1,steps:[true,true,false,false,false,false,false],status:'Pending'},
+      {id:'cl2',name:'Prostate Cancer Increase',type:'Rating Increase',filed:'Prior session',claimNum:'SC4746453',step:2,steps:[true,true,true,false,false,false,false],status:'C&P Pending'},
+      {id:'cl3',name:'Peripheral Neuropathy',type:'New SC',filed:'May 13, 2026',claimNum:'Unfiled',step:3,steps:[true,true,true,true,false,false,false],status:'Exam Complete'}
+    ],
+    appointments:[
+      {id:'a1',date:'2026-05-13',type:'C&P Exam',provider:'QTC',condition:'Peripheral Neuropathy',notes:'Went well',rating:4},
+      {id:'a2',date:'2026-05-19',type:'Specialty / Oncology',provider:'Community Care',condition:'PSMA PET results - lymph node spread',notes:'Get A&A functional limits documented',rating:0},
+      {id:'a3',date:'2026-05-21',type:'C&P Exam',provider:'QTC/Optum',condition:'Prostate Cancer + HBP',notes:'Critical - PSMA PET in hand',rating:0}
+    ],
+    actions:[
+      {id:'ac1',text:'Form 21-2680 - follow up with Dr. Chhina (SMC-L blocker)',done:false,priority:'red'},
+      {id:'ac2',text:'May 19 - Oncology: document A&A functional limitations',done:false,priority:'amber'},
+      {id:'ac3',text:'May 21 - C&P Prostate Cancer + HBP',done:false,priority:'amber'},
+      {id:'ac4',text:'Remove daughter as dependent (VA Form 21-686c)',done:false,priority:'amber'},
+      {id:'ac5',text:'CMP labs at Stockbridge VA - CKD staging',done:false,priority:'blue'},
+      {id:'ac6',text:'Cancel Google AI Ultra before May 20',done:false,priority:'red'}
+    ],
+    notes:'SMC-L target. PSMA PET confirms lymph node involvement. PACT Act eligible.',
+    statements:[],agentSpecs:[]}];
+  saveVets(veterans);
+}
+const AVATAR_COLORS=[['#3b82f6','rgba(59,130,246,0.15)'],['#10b981','rgba(16,185,129,0.15)'],['#8b5cf6','rgba(139,92,246,0.15)'],['#f59e0b','rgba(245,158,11,0.15)'],['#ef4444','rgba(239,68,68,0.15)'],['#14b8a6','rgba(20,184,166,0.15)']];
+function avatarColor(id){const i=Math.abs(id.split('').reduce((a,c)=>a+c.charCodeAt(0),0))%AVATAR_COLORS.length;return AVATAR_COLORS[i]}
+function initials(name){return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
+function renderSidebar(){
+  const list=document.getElementById('vet-list');
+  if(!veterans.length){list.innerHTML='<div style="padding:12px 14px;font-size:11px;color:var(--text3)">No veterans yet</div>';return}
+  list.innerHTML=veterans.map(v=>{
+    const[clr,bg]=avatarColor(v.id);
+    return '<div class="vet-entry '+(v.id===activeVetId?'active':'')+'" onclick="selectVet(''+v.id+'')"><div class="vet-avatar" style="background:'+bg+';color:'+clr+'">'+initials(v.name)+'</div><div class="vet-entry-info"><div class="vet-entry-name">'+v.name+'</div><div class="vet-entry-meta">'+v.branch+' &middot; '+(v.pt==='yes'?'P&T':v.combined+'%')+'</div></div><div class="vet-entry-pct" style="color:'+(v.pt==='yes'?'var(--green)':v.combined>=70?'var(--blue)':'var(--amber)')+'">'+v.combined+'%</div></div>';
+  }).join('');
+}
+function selectVet(id){activeVetId=id;localStorage.setItem('vso_active',id);renderSidebar();renderWorkspace()}
+function renderWorkspace(){
+  const v=getActive();
+  if(!v){document.getElementById('welcome-screen').style.display='flex';document.getElementById('vet-workspace').style.display='none';return}
+  document.getElementById('welcome-screen').style.display='none';
+  document.getElementById('vet-workspace').style.display='block';
+  const[clr,bg]=avatarColor(v.id);
+  const av=document.getElementById('topbar-avatar');
+  av.style.cssText='width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:500;flex-shrink:0;background:'+bg+';color:'+clr;
+  av.textContent=initials(v.name);
+  document.getElementById('topbar-name').textContent=v.name;
+  document.getElementById('topbar-meta').textContent=v.branch+' · '+(v.era||'')+' · '+(v.service||'');
+  const pillData=[{cls:'p-green',lbl:v.combined+'% '+(v.pt==='yes'?'P&T':'Combined')},{cls:'p-purple',lbl:'SMC-'+(v.smc||'None')},{cls:'p-teal',lbl:v.pact==='yes'?'PACT Act Eligible':''},{cls:'p-amber',lbl:v.file||''}];
+  document.getElementById('topbar-pills').innerHTML=pillData.filter(p=>p.lbl).map(p=>'<span class="pill '+p.cls+'">'+p.lbl+'</span>').join('');
+  renderOverview(v);renderConditions(v);renderClaims(v);renderAppointments(v);renderSMC(v);renderActions(v);renderStatements(v);renderAgentSpecs(v);
+}
+function renderOverview(v){
+  const pendingClaims=v.claims?.filter(c=>c.status!=='Complete').length||0;
+  const today=new Date().toISOString().split('T')[0];
+  const nextAppt=v.appointments?.filter(a=>a.date>=today).sort((a,b)=>a.date.localeCompare(b.date))[0];
+  document.getElementById('ov-metrics').innerHTML='<div class="metric"><div class="metric-label">Combined</div><div class="metric-value" style="color:'+(v.combined===100?'var(--green)':v.combined>=70?'var(--blue)':'var(--amber)')+'">'+v.combined+'%</div><div class="metric-sub">'+(v.pt==='yes'?'Permanent & Total':'Not P&T')+'</div></div><div class="metric"><div class="metric-label">SMC</div><div class="metric-value" style="font-size:18px">SMC-'+(v.smc||'None')+'</div><div class="metric-sub">'+(v.smc&&v.smc!=='none'?'Active':'Not established')+'</div></div><div class="metric"><div class="metric-label">Pending Claims</div><div class="metric-value">'+pendingClaims+'</div><div class="metric-sub">'+(v.claims?.length||0)+' total</div></div><div class="metric"><div class="metric-label">Next Appt</div><div class="metric-value" style="font-size:14px;color:var(--amber)">'+(nextAppt?new Date(nextAppt.date+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'None')+'</div><div class="metric-sub">'+(nextAppt?nextAppt.condition:'---')+'</div></div>';
+  document.getElementById('ov-claims-table').innerHTML=v.claims?.length?'<table><thead><tr><th>Claim</th><th>Type</th><th>Filed</th><th>Status</th></tr></thead><tbody>'+v.claims.map(c=>'<tr><td>'+c.name+'</td><td>'+c.type+'</td><td>'+c.filed+'</td><td><span class="pill '+(c.status==='Exam Complete'?'p-green':c.status==='Complete'?'p-teal':'p-amber')+'">'+c.status+'</span></td></tr>').join('')+'</tbody></table>':'<div style="font-size:12px;color:var(--text3)">No claims yet.</div>';
+  document.getElementById('ov-evidence').innerHTML=v.evidence?.length?v.evidence.map(e=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--green)">✓</span>'+e+'</div>').join(''):'<div style="font-size:12px;color:var(--text3)">No evidence logged.</div>';
+  const sugg=buildSuggestions(v);
+  document.getElementById('ov-suggestions').innerHTML=sugg.map(s=>'<div class="alert alert-'+s.type+'"><span>'+s.icon+'</span><div><strong>'+s.title+'</strong> — '+s.body+'</div></div>').join('')||'<div style="font-size:12px;color:var(--text3);padding:8px 0">No suggestions for current profile.</div>';
+}
+function buildSuggestions(v){
+  const out=[];
+  if(v.combined>=95&&v.pt!=='yes')out.push({type:'green',icon:'⚡',title:'P&T Possible',body:'Combined rating ≥95%. Consider filing for Permanent & Total status under 38 CFR § 3.951(b).'});
+  if(v.combined>=60&&(!v.smc||v.smc==='none'))out.push({type:'blue',icon:'🔗',title:'SMC-K Potential',body:'Check for anatomical losses (DC 7522, 6260 bilateral) that qualify for SMC-K add-on under 38 U.S.C. § 1114(k).'});
+  if(v.pt==='yes'&&(!v.smc||!v.smc.includes('S')))out.push({type:'blue',icon:'📋',title:'SMC-S Eligibility',body:'100% P&T may qualify for SMC-S (Housebound) if an additional 60%+ exists separately.'});
+  if(v.pt==='yes'&&v.smc&&v.smc.includes('S')&&!v.smc.includes('L'))out.push({type:'amber',icon:'🏥',title:'SMC-L Upgrade Path',body:'SMC-S active. Aid & Attendance (SMC-L) upgrade available via Form 21-2680 from treating physician under 38 CFR § 3.352(a).'});
+  if(v.conditions?.some(c=>c.bilateral&&c.pct>0))out.push({type:'blue',icon:'⚖️',title:'Bilateral Factor',body:'Bilateral extremity conditions detected. 38 CFR § 4.26 applies — 10% bonus to combined bilateral rating.'});
+  if(v.pact==='yes'||v.era?.includes('OIF')||v.era?.includes('OEF')||v.era?.includes('Vietnam'))out.push({type:'purple',icon:'🛡️',title:'PACT Act Review',body:'Eligible era detected. Review PACT Act presumptives — toxic exposure conditions may now be SC without nexus letter.'});
+  return out;
+}
+function renderConditions(v){
+  const conds=v.conditions||[];
+  document.getElementById('conditions-table').innerHTML=conds.length?'<table><thead><tr><th>Condition</th><th>Current %</th><th>Speculated %</th><th>DC</th><th>Effective</th><th>Flags</th><th></th></tr></thead><tbody>'+conds.map(c=>'<tr><td>'+c.cond+(c.bilateral?'<span class="pill p-gray" style="margin-left:6px;font-size:9px">Bilateral</span>':'')+'</td><td><div style="display:flex;align-items:center;gap:6px"><span style="font-family:var(--mono);font-weight:500;min-width:32px;color:'+(c.pct>=70?'var(--green)':c.pct>=20?'var(--blue)':'var(--text3)')+'">'+c.pct+'%</span><div class="bar-wrap"><div class="bar-fill" style="width:'+c.pct+'%;background:'+(c.pct>=70?'var(--green)':c.pct>=20?'var(--blue)':'var(--text3)')+'"></div></div></div></td><td><input type="number" min="0" max="100" step="10" value="'+(c.speculated||c.pct)+'" onchange="updateSpec(''+v.id+'',''+c.id+'',this.value)" style="width:60px;padding:3px 6px;font-size:12px" /></td><td style="font-family:var(--mono);font-size:11px;color:var(--text3)">'+c.dc+'</td><td style="font-size:11px;color:var(--text3)">'+(c.eff||'---')+'</td><td>'+(c.flag?'<span class="pill '+(c.flag.includes('P&T')?'p-purple':c.flag.includes('SMC')?'p-teal':'p-amber')+'">'+c.flag+'</span>':'')+'</td><td><button class="btn-sm" style="color:var(--red);border-color:var(--red-b)" onclick="removeCondition(''+v.id+'',''+c.id+'')">&#10005;</button></td></tr>').join('')+'</tbody></table>':'<div style="font-size:12px;color:var(--text3)">No conditions. Add using the button above.</div>';
+}
+function renderClaims(v){
+  const STEPS=['ITF','Submitted','Evidence','C&P Exam','VA Review','Decision','Complete'];
+  document.getElementById('claims-list').innerHTML=(v.claims||[]).map(c=>'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><div><div style="font-size:14px;font-weight:500">'+c.name+'</div><div style="font-family:var(--mono);font-size:10px;color:var(--text3)">'+c.type+' · '+(c.claimNum||'No #')+' · Filed '+c.filed+'</div></div><div style="display:flex;gap:6px;align-items:center"><span class="pill '+(c.status==='Complete'?'p-teal':c.status==='Exam Complete'?'p-green':'p-amber')+'">'+c.status+'</span><button class="btn-sm" style="color:var(--red)" onclick="removeClaim(''+v.id+'',''+c.id+'')">&#10005;</button></div></div><div class="process-bar">'+STEPS.map((_,i)=>'<div class="process-seg" style="background:'+(c.steps[i]?'var(--green)':i===c.step?'var(--blue)':'var(--bg3)')+';border:1px solid '+(c.steps[i]?'var(--green-b)':i===c.step?'var(--blue-b)':'var(--border)')+'" title="'+STEPS[i]+'" onclick="toggleClaimStep(''+v.id+'',''+c.id+'','+i+')"></div>').join('')+'</div><div style="font-size:11px;color:var(--text2);margin-top:4px">Current step: <span style="color:var(--blue)">'+(STEPS[c.step]||'Complete')+'</span></div></div>').join('')||'<div class="card" style="color:var(--text3);font-size:12px">No claims filed yet.</div>';
+}
+function renderAppointments(v){
+  const sorted=(v.appointments||[]).sort((a,b)=>a.date.localeCompare(b.date));
+  const ratingLabel={1:'Poor',2:'Fair',3:'Avg',4:'Good',5:'Great'};
+  const ratingColor={1:'var(--red)',2:'var(--amber)',3:'var(--blue)',4:'var(--green)',5:'var(--green)'};
+  document.getElementById('appts-list').innerHTML=sorted.length?sorted.map(a=>'<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)"><div style="min-width:50px;text-align:center"><div style="font-family:var(--mono);font-size:20px;font-weight:500;line-height:1">'+new Date(a.date+'T12:00').getDate()+'</div><div style="font-family:var(--mono);font-size:10px;color:var(--text2)">'+new Date(a.date+'T12:00').toLocaleString('en-US',{month:'short'})+'</div></div><div style="width:1px;background:var(--border);align-self:stretch"></div><div style="flex:1"><div style="font-size:13px;font-weight:500;margin-bottom:2px">'+a.condition+'</div><div style="font-size:11px;color:var(--text2)">'+a.type+' · '+a.provider+'</div>'+(a.notes?'<div style="font-size:11px;color:var(--text3);margin-top:3px">'+a.notes+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0">'+(a.rating?'<span class="pill" style="background:rgba(0,0,0,0.2);color:'+ratingColor[a.rating]+';border-color:'+ratingColor[a.rating]+'">'+ratingLabel[a.rating]+'</span>':'<span class="pill p-gray">Not rated</span>')+'<div><button class="btn-sm" style="margin-top:4px;color:var(--red)" onclick="removeAppt(''+v.id+'',''+a.id+'')">Remove</button></div></div></div>').join(''):'<div style="font-size:12px;color:var(--text3);padding:8px 0">No appointments.</div>';
+}
+function renderSMC(v){
+  const smcActive=v.smc&&v.smc!=='none';
+  document.getElementById('smc-metrics').innerHTML='<div class="metric"><div class="metric-label">Current SMC</div><div class="metric-value" style="font-size:18px;color:'+(smcActive?'var(--green)':'var(--text3)')+'">SMC-'+(v.smc||'None')+'</div><div class="metric-sub">'+(smcActive?'Active':'Not established')+'</div></div><div class="metric"><div class="metric-label">Combined Rating</div><div class="metric-value">'+v.combined+'%</div><div class="metric-sub">'+(v.pt==='yes'?'P&T — Permanent':'Not P&T')+'</div></div>';
+  const tiers=[{level:'SMC-K',desc:'Anatomical loss — creative organ, extremity, eye. Adds flat amount, stacks with any level.',status:v.smc?.includes('K')?'Active':'Check'},{level:'SMC-S',desc:'100% P&T + 60%+ additional schedular, or housebound in fact.',status:v.smc?.includes('S')?'Active':v.combined===100&&v.pt==='yes'?'Possible':'N/A'},{level:'SMC-L',desc:'Aid & Attendance — requires physician certification (Form 21-2680).',status:v.smc?.includes('L')?'Active':'Assess'},{level:'SMC-L½',desc:'SMC-L + additional independent 50%+ disability.',status:'Monitor'},{level:'SMC-M',desc:'Loss of use of foot AND hand, or blindness + A&A.',status:'Monitor'}];
+  document.getElementById('smc-tier-list').innerHTML=tiers.map(t=>'<div style="display:grid;grid-template-columns:80px 1fr 100px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px"><span class="pill '+(t.status==='Active'?'p-green':t.status==='Possible'?'p-amber':'p-gray')+'" style="justify-self:start">'+t.level+'</span><div style="color:var(--text2)">'+t.desc+'</div><span class="pill '+(t.status==='Active'?'p-green':t.status==='Possible'||t.status==='Assess'?'p-amber':'p-gray')+'" style="justify-self:end">'+t.status+'</span></div>').join('');
+  const aaItems=[{text:'100% P&T established',done:v.combined===100&&v.pt==='yes'},{text:'Documented need for regular assistance with daily living',done:false},{text:'Active medical condition requiring ongoing care',done:(v.conditions?.filter(c=>c.pct>=20).length||0)>0},{text:'Form 21-2680 from treating physician',done:false},{text:'Physician statement of A&A medical necessity',done:false}];
+  document.getElementById('smc-l-checklist').innerHTML=aaItems.map(i=>'<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:'+(i.done?'var(--green)':'var(--text3)')+'">'+( i.done?'✓':'○')+'</span>'+i.text+'</div>').join('');
+  document.getElementById('smc-agent-box').innerHTML='<span class="agent-dot"></span><strong style="color:var(--blue)">Agent SMC Assessment</strong><br>'+buildSMCAssessment(v);
+}
+function buildSMCAssessment(v){
+  if(v.combined===100&&v.pt==='yes'&&!v.smc?.includes('L'))return'Strong candidate for SMC-L (Aid & Attendance) upgrade. With '+(v.conditions?.filter(c=>c.pct>=20).length||0)+' conditions rated ≥20%, the functional impairment argument is supported. Critical next step: Form 21-2680 from treating physician (38 CFR § 3.352(a)).';
+  if(v.combined===100&&v.pt==='yes'&&v.smc?.includes('L'))return'SMC-L active. Monitor for SMC-M eligibility if additional extremity losses documented.';
+  if(v.combined>=95)return'Combined rating ≥95% — borderline P&T. Push for P&T rating first, then SMC-S (Housebound) as next milestone.';
+  return'Focus on reaching 100% combined before SMC tier escalation.';
+}
+function renderActions(v){
+  const pMap={red:'p-red',amber:'p-amber',blue:'p-blue'};
+  document.getElementById('actions-list').innerHTML=(v.actions||[]).map(a=>'<div class="action-row"><div class="chk '+(a.done?'done':'')+'" onclick="toggleAction(''+v.id+'',''+a.id+'')">'+(a.done?'<span style="font-size:10px;color:#fff">✓</span>':'')+'</div><div style="flex:1;font-size:12px;'+(a.done?'text-decoration:line-through;color:var(--text3)':'')+'">'+a.text+'</div><span class="pill '+(pMap[a.priority]||'p-gray')+'">'+a.priority+'</span><button class="btn-sm" style="color:var(--red)" onclick="removeAction(''+v.id+'',''+a.id+'')">&#10005;</button></div>').join('')||'<div style="font-size:12px;color:var(--text3);padding:8px 0">No actions.</div>';
+}
+function renderStatements(v){
+  document.getElementById('saved-statements-list').innerHTML=(v.statements||[]).map(s=>'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div><div style="font-size:13px;font-weight:500">'+s.type+'</div><div style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+s.condition+' · '+s.date+'</div></div><div style="display:flex;gap:6px"><button class="btn-sm" onclick="viewStatement(''+v.id+'',''+s.id+'')">View</button><button class="btn-sm" style="color:var(--red)" onclick="deleteStatement(''+v.id+'',''+s.id+'')">&#10005;</button></div></div><div style="font-size:12px;color:var(--text2);overflow:hidden;max-height:36px">'+s.text.slice(0,150)+'...</div></div>').join('')||'<div style="font-size:12px;color:var(--text3);padding:8px 0">No saved statements yet.</div>';
+}
+function renderAgentSpecs(v){
+  document.getElementById('agent-saved-list').innerHTML=(v.agentSpecs||[]).map(s=>'<div class="card" style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:13px;font-weight:500">'+s.cond+'</div><div style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+s.dc+' · '+s.confidence+' confidence · '+s.date+'</div></div><div style="text-align:right;display:flex;align-items:flex-start;gap:8px"><div><div style="font-family:var(--mono);font-size:18px;font-weight:500;color:var(--green)">'+s.rating+'</div></div><button class="btn-sm" style="color:var(--red)" onclick="deleteSpec(''+v.id+'',''+s.id+'')">&#10005;</button></div></div>').join('')||'<div style="font-size:12px;color:var(--text3);padding:8px 0">No saved speculations yet.</div>';
+}
+function openAddVet(){editingVetId=null;document.getElementById('add-vet-title').textContent='// Add New Veteran';['nv-name','nv-era','nv-service','nv-conditions','nv-evidence','nv-notes','nv-file'].forEach(id=>document.getElementById(id).value='');document.getElementById('nv-combined').value='';document.getElementById('nv-pt').value='no';document.getElementById('nv-smc').value='none';document.getElementById('nv-pact').value='unknown';document.getElementById('nv-branch').value='Army';document.getElementById('delete-vet-btn').style.display='none';document.getElementById('add-vet-modal').classList.add('open')}
+function closeAddVet(){document.getElementById('add-vet-modal').classList.remove('open')}
+function editCurrentVet(){const v=getActive();if(!v)return;editingVetId=v.id;document.getElementById('add-vet-title').textContent='// Edit Veteran Profile';document.getElementById('nv-name').value=v.name||'';document.getElementById('nv-branch').value=v.branch||'Army';document.getElementById('nv-era').value=v.era||'';document.getElementById('nv-service').value=v.service||'';document.getElementById('nv-combined').value=v.combined||0;document.getElementById('nv-pt').value=v.pt||'no';document.getElementById('nv-smc').value=v.smc||'none';document.getElementById('nv-pact').value=v.pact||'unknown';document.getElementById('nv-file').value=v.file||'';document.getElementById('nv-conditions').value=(v.conditions||[]).map(c=>c.cond+' | '+c.pct+'% | '+c.dc+' | '+(c.eff||'')).join('
+');document.getElementById('nv-evidence').value=(v.evidence||[]).join('
+');document.getElementById('nv-notes').value=v.notes||'';document.getElementById('delete-vet-btn').style.display='inline-flex';document.getElementById('add-vet-modal').classList.add('open')}
+function saveVeteran(){const name=document.getElementById('nv-name').value.trim();if(!name){alert('Enter a name.');return}const condRaw=document.getElementById('nv-conditions').value.trim();const conditions=condRaw?condRaw.split('
+').filter(l=>l.trim()).map((line,i)=>{const p=line.split('|').map(s=>s.trim());return{id:'c'+Date.now()+i,cond:p[0]||'Unknown',pct:parseInt(p[1])||0,dc:p[2]||'---',eff:p[3]||'',bilateral:p[0]?.toLowerCase().includes('bilateral'),flag:'',speculated:parseInt(p[1])||0}}):[];const evidence=document.getElementById('nv-evidence').value.trim().split('
+').filter(l=>l.trim());if(editingVetId){const idx=veterans.findIndex(v=>v.id===editingVetId);if(idx>=0){const old=veterans[idx];veterans[idx]={...old,name,branch:document.getElementById('nv-branch').value,era:document.getElementById('nv-era').value,service:document.getElementById('nv-service').value,combined:parseInt(document.getElementById('nv-combined').value)||0,pt:document.getElementById('nv-pt').value,smc:document.getElementById('nv-smc').value,pact:document.getElementById('nv-pact').value,file:document.getElementById('nv-file').value,conditions,evidence,notes:document.getElementById('nv-notes').value}}}else{const v={id:'vet_'+Date.now(),name,branch:document.getElementById('nv-branch').value,era:document.getElementById('nv-era').value,service:document.getElementById('nv-service').value,combined:parseInt(document.getElementById('nv-combined').value)||0,pt:document.getElementById('nv-pt').value,smc:document.getElementById('nv-smc').value,pact:document.getElementById('nv-pact').value,file:document.getElementById('nv-file').value,conditions,evidence,notes:document.getElementById('nv-notes').value,claims:[],appointments:[],actions:[],statements:[],agentSpecs:[]};veterans.unshift(v);activeVetId=v.id;localStorage.setItem('vso_active',activeVetId)}saveVets(veterans);renderSidebar();renderWorkspace();closeAddVet()}
+function deleteCurrentVet(){if(!confirm('Delete this veteran? This cannot be undone.'))return;veterans=veterans.filter(v=>v.id!==editingVetId);if(activeVetId===editingVetId){activeVetId=veterans[0]?.id||null;localStorage.setItem('vso_active',activeVetId||'')}saveVets(veterans);renderSidebar();renderWorkspace();closeAddVet()}
+function openAddCondition(){const wrap=document.getElementById('condition-form-wrap');wrap.style.display='block';wrap.innerHTML='<div class="igrid3"><div class="igroup"><label class="ilabel">Condition</label><input type="text" id="nc-cond" placeholder="e.g. PTSD" /></div><div class="igroup"><label class="ilabel">Current %</label><input type="number" id="nc-pct" min="0" max="100" step="10" placeholder="e.g. 70" /></div><div class="igroup"><label class="ilabel">Diagnostic Code</label><input type="text" id="nc-dc" placeholder="e.g. DC 9411" /></div><div class="igroup"><label class="ilabel">Effective Date</label><input type="text" id="nc-eff" placeholder="e.g. Mar 2015" /></div><div class="igroup"><label class="ilabel">Bilateral?</label><select id="nc-bil"><option value="false">No</option><option value="true">Yes</option></select></div><div class="igroup"><label class="ilabel">Flag</label><input type="text" id="nc-flag" placeholder="e.g. P&T, Pending" /></div></div><button class="btn btn-green" onclick="saveCondition()">Add Condition</button>'}
+function saveCondition(){const v=getActive();if(!v)return;const cond=document.getElementById('nc-cond').value.trim();if(!cond){alert('Enter condition name.');return}const c={id:'c'+Date.now(),cond,pct:parseInt(document.getElementById('nc-pct').value)||0,dc:document.getElementById('nc-dc').value||'---',eff:document.getElementById('nc-eff').value||'',bilateral:document.getElementById('nc-bil').value==='true',flag:document.getElementById('nc-flag').value||'',speculated:parseInt(document.getElementById('nc-pct').value)||0};if(!v.conditions)v.conditions=[];v.conditions.push(c);saveVets(veterans);renderWorkspace();document.getElementById('condition-form-wrap').style.display='none'}
+function updateSpec(vetId,condId,val){const v=getVet(vetId);if(!v)return;const c=v.conditions?.find(x=>x.id===condId);if(c)c.speculated=parseInt(val)||0;saveVets(veterans)}
+function removeCondition(vetId,condId){const v=getVet(vetId);if(!v)return;v.conditions=v.conditions?.filter(c=>c.id!==condId)||[];saveVets(veterans);renderWorkspace()}
+function toggleClaimStep(vetId,claimId,stepIdx){const v=getVet(vetId);const cl=v?.claims?.find(c=>c.id===claimId);if(!cl)return;cl.steps[stepIdx]=!cl.steps[stepIdx];cl.step=cl.steps.lastIndexOf(true)+1;if(cl.step>=7)cl.step=6;const STATUSES=['In Progress','Submitted','Evidence Gathering','C&P Scheduled','Under Review','Decision Pending','Complete'];cl.status=STATUSES[cl.step]||'In Progress';saveVets(veterans);renderClaims(v)}
+function removeClaim(vetId,claimId){const v=getVet(vetId);if(!v)return;v.claims=v.claims?.filter(c=>c.id!==claimId)||[];saveVets(veterans);renderWorkspace()}
+let wizardStep=0;let wizardData={};
+const WIZARD_STEPS=['Claim Type','Condition','Evidence','Filing','Review'];
+function openClaimWizard(){const v=getActive();if(!v){alert('Select a veteran first.');return}wizardStep=0;wizardData={};document.getElementById('wizard-vet-name').textContent='Filing for: '+v.name;renderWizard();document.getElementById('claim-wizard-modal').classList.add('open')}
+function closeClaimWizard(){document.getElementById('claim-wizard-modal').classList.remove('open')}
+function renderWizard(){
+  const prog=document.getElementById('wizard-progress');
+  prog.innerHTML=WIZARD_STEPS.map((_,i)=>'<div class="wstep '+(i<wizardStep?'done':i===wizardStep?'active':'')+'"></div>').join('');
+  const v=getActive();
+  const bodies={
+    0:'<div class="sec">Select Claim Type</div><div style="display:grid;gap:8px">'+['New SC Condition','Secondary SC (caused by existing SC)','Rating Increase','SMC Upgrade','Supplemental Claim','Board Appeal (BVA)'].map(t=>'<div style="padding:12px 14px;background:var(--bg3);border:1px solid '+(wizardData.type===t?'var(--blue-b)':'var(--border)')+';border-radius:4px;cursor:pointer;font-size:13px" onclick="wizardData.type=''+t+'';this.parentElement.querySelectorAll('div').forEach(el=>el.style.borderColor='var(--border)');this.style.borderColor='var(--blue-b)'">'+t+'</div>').join('')+'</div>',
+    1:'<div class="sec">Condition Details</div><div class="igrid2"><div class="igroup"><label class="ilabel">Condition Name</label><input type="text" id="wz-cond" value="'+(wizardData.cond||'')+'" placeholder="e.g. Peripheral Neuropathy" /></div><div class="igroup"><label class="ilabel">Diagnostic Code</label><input type="text" id="wz-dc" value="'+(wizardData.dc||'')+'" placeholder="e.g. DC 8520" /></div><div class="igroup"><label class="ilabel">Secondary To</label><input type="text" id="wz-secondary" value="'+(wizardData.secondary||'')+'" placeholder="e.g. Hypertension" /></div><div class="igroup"><label class="ilabel">Bilateral?</label><select id="wz-bilateral"><option value="no">No</option><option value="yes">Yes</option></select></div></div><div class="igroup"><label class="ilabel">Symptoms / Functional Impact</label><textarea id="wz-symptoms" placeholder="Describe symptoms...">'+(wizardData.symptoms||'')+'</textarea></div>',
+    2:'<div class="sec">Evidence Checklist</div>'+['Service treatment records (STRs)','VA medical records (VAMR)','Private medical records','Nexus letter from physician','Buddy statements (lay evidence)','Personal statement (VA Form 21-4138)','DBQ (Disability Benefits Questionnaire)','C&P exam scheduled'].map(e=>'<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px"><input type="checkbox" style="width:16px;height:16px;accent-color:var(--green)" '+(wizardData.evidence||[]).includes(e)?'checked':'')+' onchange="if(this.checked){wizardData.evidence=(wizardData.evidence||[]).concat(''+e+'')}else{wizardData.evidence=(wizardData.evidence||[]).filter(x=>x!==''+e+'')}" /><label>'+e+'</label></div>').join('')+'<div class="igroup" style="margin-top:10px"><label class="ilabel">Additional notes</label><textarea id="wz-evnotes" placeholder="Other documents...">'+(wizardData.evnotes||'')+'</textarea></div>',
+    3:'<div class="sec">Filing Details</div><div class="igrid2"><div class="igroup"><label class="ilabel">Date Filed / ITF Date</label><input type="date" id="wz-date" value="'+(wizardData.filed||new Date().toISOString().split('T')[0])+'" /></div><div class="igroup"><label class="ilabel">Claim Number</label><input type="text" id="wz-claimnum" value="'+(wizardData.claimNum||'')+'" placeholder="e.g. 128088405" /></div><div class="igroup"><label class="ilabel">Current Step</label><select id="wz-step"><option value="0">ITF Filed</option><option value="1">Claim Submitted</option><option value="2">Evidence Gathering</option><option value="3">C&P Exam</option><option value="4">VA Review</option></select></div><div class="igroup"><label class="ilabel">Priority</label><select id="wz-priority"><option value="normal">Normal</option><option value="urgent">Urgent</option><option value="homeless">Homeless veteran</option></select></div></div><div class="igroup"><label class="ilabel">Notes</label><textarea id="wz-notes" placeholder="Additional notes...">'+(wizardData.notes||'')+'</textarea></div>',
+    4:'<div class="sec">Review &amp; Submit</div><div class="card" style="font-size:13px;line-height:1.9"><div class="pay-row"><span style="color:var(--text2)">Veteran</span><span>'+(v?.name)+'</span></div><div class="pay-row"><span style="color:var(--text2)">Claim Type</span><span>'+(wizardData.type||'---')+'</span></div><div class="pay-row"><span style="color:var(--text2)">Condition</span><span>'+(wizardData.cond||'---')+(wizardData.dc?' ('+wizardData.dc+')':'')+'</span></div><div class="pay-row"><span style="color:var(--text2)">Filed</span><span>'+(wizardData.filed||'---')+'</span></div><div class="pay-row"><span style="color:var(--text2)">Evidence Items</span><span>'+((wizardData.evidence||[]).length)+' checked</span></div></div><div class="alert alert-blue"><span>&#9889;</span><div>After saving, use the Agent tab to speculate the rating outcome.</div></div>'
+  };
+  document.getElementById('wizard-body').innerHTML=bodies[wizardStep]+'<div style="display:flex;justify-content:space-between;margin-top:20px"><button class="btn btn-gray" onclick="wizardNav(-1)" '+(wizardStep===0?'disabled':'')+'>&#8592; Back</button><button class="btn btn-'+(wizardStep===4?'green':'blue')+'" onclick="wizardNav(1)">'+(wizardStep===4?'Save Claim':'Next &#8594;')+'</button></div>';
+}
+function wizardNav(dir){
+  const captures={1:()=>{wizardData.cond=document.getElementById('wz-cond')?.value||'';wizardData.dc=document.getElementById('wz-dc')?.value||'';wizardData.secondary=document.getElementById('wz-secondary')?.value||'';wizardData.symptoms=document.getElementById('wz-symptoms')?.value||''},2:()=>{wizardData.evnotes=document.getElementById('wz-evnotes')?.value||''},3:()=>{wizardData.filed=document.getElementById('wz-date')?.value||'';wizardData.claimNum=document.getElementById('wz-claimnum')?.value||'';wizardData.step=parseInt(document.getElementById('wz-step')?.value)||0;wizardData.notes=document.getElementById('wz-notes')?.value||''}};
+  if(captures[wizardStep])captures[wizardStep]();
+  if(dir===1&&wizardStep===4){const v=getActive();if(!v)return;if(!v.claims)v.claims=[];const steps=Array.from({length:7},(_,i)=>i<=(wizardData.step||0));v.claims.unshift({id:'cl'+Date.now(),name:wizardData.cond||'New Claim',type:wizardData.type||'New SC',filed:wizardData.filed||new Date().toLocaleDateString(),claimNum:wizardData.claimNum||'Pending',step:wizardData.step||0,steps,status:['In Progress','Submitted','Evidence','C&P Scheduled','Under Review','Decision Pending','Complete'][wizardData.step||0]||'In Progress',notes:wizardData.notes});if(!v.actions)v.actions=[];v.actions.unshift({id:'ac'+Date.now(),text:'Monitor claim: '+(wizardData.cond||'New Claim')+' on VA.gov',done:false,priority:'blue'});saveVets(veterans);renderWorkspace();closeClaimWizard();showTab('claims');return}
+  wizardStep=Math.max(0,Math.min(4,wizardStep+dir));renderWizard();
+}
+function openAddAppt(){apptRating=0;document.getElementById('appt-modal').classList.add('open')}
+function closeApptModal(){document.getElementById('appt-modal').classList.remove('open')}
+function setApptRating(val,btn){apptRating=val;document.querySelectorAll('#ap-scale .btn').forEach(b=>b.className='btn btn-gray');btn.className='btn btn-'+(val>=4?'green':val>=3?'blue':'amber')}
+function saveAppt(){const v=getActive();if(!v)return;const date=document.getElementById('ap-date').value;if(!date){alert('Select a date.');return}if(!v.appointments)v.appointments=[];v.appointments.push({id:'a'+Date.now(),date,type:document.getElementById('ap-type').value,provider:document.getElementById('ap-provider').value,condition:document.getElementById('ap-condition').value,notes:document.getElementById('ap-notes').value,rating:apptRating});saveVets(veterans);renderWorkspace();closeApptModal()}
+function removeAppt(vetId,apptId){const v=getVet(vetId);if(!v)return;v.appointments=v.appointments?.filter(a=>a.id!==apptId)||[];saveVets(veterans);renderWorkspace()}
+function addAction(){const text=prompt('Action item:');if(!text)return;const priority=prompt('Priority (red/amber/blue):','amber')||'amber';const v=getActive();if(!v)return;if(!v.actions)v.actions=[];v.actions.unshift({id:'ac'+Date.now(),text,done:false,priority});saveVets(veterans);renderActions(v)}
+function toggleAction(vetId,actionId){const v=getVet(vetId);const a=v?.actions?.find(x=>x.id===actionId);if(a){a.done=!a.done;saveVets(veterans);renderActions(v)}}
+function removeAction(vetId,actionId){const v=getVet(vetId);if(!v)return;v.actions=v.actions?.filter(a=>a.id!==actionId)||[];saveVets(veterans);renderActions(v)}
+function buildVetContext(v){const conds=(v.conditions||[]).map(c=>c.cond+' '+c.pct+'% (DC '+c.dc+(c.bilateral?' bilateral':'')+')').join(', ');return'Veteran: '+v.name+'. Branch: '+v.branch+'. Era: '+(v.era||'Unknown')+'. Combined: '+v.combined+'%. P&T: '+v.pt+'. SMC: '+(v.smc||'None')+'. PACT: '+v.pact+'. Conditions: '+conds+'. Evidence: '+(v.evidence||[]).join('; ')+'. Pending: '+(v.notes||'None')}
+async function runAgentSpec(){
+  const v=getActive();if(!v){alert('Select a veteran.');return}
+  const condition=document.getElementById('ag-condition').value.trim();if(!condition){alert('Enter a condition.');return}
+  const dc=document.getElementById('ag-dc').value.trim();
+  const type=document.getElementById('ag-type').value;
+  const secondary=document.getElementById('ag-secondary').value.trim();
+  const notes=document.getElementById('ag-notes').value.trim();
+  const apiKey=getApiKey();if(!apiKey){alert('Enter your Anthropic API key in the sidebar first.');return}
+  const btn=document.getElementById('ag-btn');btn.disabled=true;btn.textContent='Analyzing...';
+  const out=document.getElementById('ag-output');const inner=document.getElementById('ag-inner');
+  out.classList.add('open');
+  inner.innerHTML='<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)"><div class="loading-dots"><span></span><span></span><span></span></div> Agent analyzing '+v.name+"'s claim...</div>";
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'You are a VA claims rating specialist. Analyze ONLY based on the specific veteran profile provided. Respond ONLY in JSON: {"estimatedRating":"20%","confidence":"Medium","diagnosticCode":"DC XXXX","uscCitations":["38 CFR § X.XXX"],"rationale":"2-3 sentences","smcImpact":"string","keyEvidenceNeeded":"string","combinedRatingNote":"string","nextSteps":"string"}',messages:[{role:'user',content:buildVetContext(v)+'
+
+Speculate rating outcome for:
+Condition: '+condition+'
+'+(dc?'DC: '+dc:'')+'
+Type: '+type+'
+'+(secondary?'Secondary to: '+secondary:'')+'
+'+(notes?'Notes: '+notes:'')}]})});
+    const data=await res.json();
+    const p=JSON.parse(data.content?.[0]?.text?.replace(/```json|```/g,'')||'{}');
+    const cc=p.confidence==='High'?'var(--green)':p.confidence==='Medium'?'var(--amber)':'var(--red)';
+    inner.innerHTML='<div style="display:flex;align-items:flex-end;gap:16px;margin-bottom:12px"><div><div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Estimated Rating</div><div class="spec-big">'+p.estimatedRating+'</div></div><div style="padding-bottom:4px"><span class="pill" style="background:rgba(0,0,0,0.2);color:'+cc+';border:1px solid '+cc+'">'+p.confidence+' Confidence</span><div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:3px">'+p.diagnosticCode+'</div></div></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">'+(p.uscCitations||[]).map(c=>'<span class="pill p-blue" style="font-size:10px">'+c+'</span>').join('')+'</div><div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px">'+p.rationale+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><div style="background:var(--bg2);border:1px solid var(--border);border-radius:2px;padding:9px 11px"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:3px">SMC Impact</div><div style="font-size:12px">'+p.smcImpact+'</div></div><div style="background:var(--bg2);border:1px solid var(--border);border-radius:2px;padding:9px 11px"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Combined Rating Note</div><div style="font-size:12px">'+p.combinedRatingNote+'</div></div></div><div style="background:var(--bg2);border:1px solid var(--border);border-radius:2px;padding:9px 11px;margin-bottom:8px"><div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Key Evidence Needed</div><div style="font-size:12px">'+p.keyEvidenceNeeded+'</div></div><div style="background:var(--green-dim);border:1px solid var(--green-b);border-radius:2px;padding:9px 11px"><div style="font-family:var(--mono);font-size:9px;color:var(--green);text-transform:uppercase;margin-bottom:3px">Next Steps</div><div style="font-size:12px">'+p.nextSteps+'</div></div><div style="margin-top:10px;text-align:right"><button class="btn btn-gray" style="font-size:10px" onclick="saveSpec(''+v.id+'',''+condition.replace(/'/g,"\'")+'',''+p.estimatedRating+'',''+p.diagnosticCode+'',''+p.confidence+'')">Save Speculation</button></div>';
+  }catch(e){inner.innerHTML='<div style="color:var(--red);font-size:12px">Error: '+e.message+'</div>'}
+  btn.disabled=false;btn.textContent='⚡ Run Speculation';
+}
+function saveSpec(vetId,cond,rating,dc,confidence){const v=getVet(vetId);if(!v)return;if(!v.agentSpecs)v.agentSpecs=[];v.agentSpecs.unshift({id:'sp'+Date.now(),cond,rating,dc,confidence,date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})});saveVets(veterans);renderAgentSpecs(v)}
+function deleteSpec(vetId,specId){const v=getVet(vetId);if(!v)return;v.agentSpecs=v.agentSpecs?.filter(s=>s.id!==specId)||[];saveVets(veterans);renderAgentSpecs(v)}
+async function generateStatement(){
+  const v=getActive();if(!v){alert('Select a veteran.');return}
+  const type=document.getElementById('st-type').value;
+  const condition=document.getElementById('st-condition').value.trim()||'all pending conditions';
+  const context=document.getElementById('st-context').value.trim();
+  const author=document.getElementById('st-author').value.trim();
+  const apiKey=getApiKey();if(!apiKey){alert('Enter your Anthropic API key in the sidebar first.');return}
+  const btn=document.getElementById('st-btn');btn.disabled=true;btn.textContent='Generating...';
+  const out=document.getElementById('st-output');out.classList.remove('open');out.textContent='';
+  const typeLabels={personal:'Personal Statement in Support of Claim (VA Form 21-4138)',buddy:'Buddy Statement (Lay Evidence)',nexus:'Nexus Letter (draft for physician)',cp_prep:'C&P Exam Preparation Notes',smc_l:'SMC-L Aid & Attendance Narrative',nod:'Notice of Disagreement Response',itf:'Intent to File Memo'};
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:'You are a VA claims specialist who writes professional statements for veterans. Use this veteran's SPECIFIC records only. Write in clear paragraphs, no markdown headers or bullets, ready to print and sign.',messages:[{role:'user',content:'Write a '+typeLabels[type]+' for:
+'+buildVetContext(v)+'
+Target condition: '+condition+'
+'+(author?'Author (buddy): '+author:'')+'
+'+(context?'Additional context: '+context:'')+'
+Make it specific, credible, and legally grounded using CFR citations where appropriate.'}]})});
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'Error.';
+    out.textContent=text;out.classList.add('open');
+    document.getElementById('st-copy-wrap').style.display='block';
+    if(!v.statements)v.statements=[];
+    v.statements.unshift({id:'st'+Date.now(),type:typeLabels[type],condition,text,date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})});
+    saveVets(veterans);renderStatements(v);
+  }catch(e){out.textContent='Error: '+e.message;out.classList.add('open')}
+  btn.disabled=false;btn.textContent='📄 Generate Statement';
+}
+async function generateStrategy(){
+  const v=getActive();if(!v){alert('Select a veteran.');return}
+  const condition=document.getElementById('st-condition').value.trim()||'overall claim strategy';
+  const context=document.getElementById('st-context').value.trim();
+  const apiKey=getApiKey();if(!apiKey){alert('Enter your Anthropic API key in the sidebar first.');return}
+  const box=document.getElementById('strategy-box');const inner=document.getElementById('strategy-inner');
+  box.classList.add('open');
+  inner.innerHTML='<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)"><div class="loading-dots"><span></span><span></span><span></span></div> Building claim strategy for '+v.name+'...</div>';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'You are a VA claims strategist. Build a step-by-step strategy for THIS specific veteran. Respond ONLY in JSON: {"overview":"string","steps":[{"step":"string","action":"string","timeline":"string","cite":"string"}],"evidence":["string"],"pitfalls":["string"],"expectedOutcome":"string"}',messages:[{role:'user',content:'Build a claim strategy for '+v.name+' targeting: '+condition+(context?'. Context: '+context:'')+'
+'+buildVetContext(v)}]})});
+    const data=await res.json();
+    const p=JSON.parse(data.content?.[0]?.text?.replace(/```json|```/g,'')||'{}');
+    inner.innerHTML='<div style="font-size:13px;margin-bottom:12px;line-height:1.6">'+(p.overview||'')+'</div>'+(p.steps||[]).map((s,i)=>'<div style="display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)"><div style="font-family:var(--mono);font-size:11px;color:var(--blue);min-width:20px">'+(i+1)+'</div><div style="flex:1"><div style="font-size:13px;font-weight:500;margin-bottom:2px">'+s.step+'</div><div style="font-size:12px;color:var(--text2)">'+s.action+'</div><div style="display:flex;gap:5px;margin-top:3px">'+(s.timeline?'<span class="pill p-amber" style="font-size:9px">'+s.timeline+'</span>':'')+(s.cite?'<span class="pill p-blue" style="font-size:9px">'+s.cite+'</span>':'')+'</div></div></div>').join('')+(p.evidence?.length?'<div style="margin-top:10px"><div style="font-family:var(--mono);font-size:9px;color:var(--green);text-transform:uppercase;margin-bottom:5px">Evidence Needed</div>'+p.evidence.map(e=>'<div style="font-size:12px;color:var(--text2);padding:4px 0;border-bottom:1px solid var(--border)">✓ '+e+'</div>').join('')+'</div>':'')+(p.pitfalls?.length?'<div style="margin-top:8px"><div style="font-family:var(--mono);font-size:9px;color:var(--amber);text-transform:uppercase;margin-bottom:5px">Pitfalls</div>'+p.pitfalls.map(e=>'<div style="font-size:12px;color:var(--text2);padding:4px 0;border-bottom:1px solid var(--border)">⚠ '+e+'</div>').join('')+'</div>':'')+(p.expectedOutcome?'<div style="margin-top:10px;background:var(--green-dim);border:1px solid var(--green-b);border-radius:4px;padding:10px;font-size:12px">'+p.expectedOutcome+'</div>':'');
+  }catch(e){inner.innerHTML='<div style="color:var(--red);font-size:12px">Error: '+e.message+'</div>'}
+}
+function copyStmt(){navigator.clipboard.writeText(document.getElementById('st-output').textContent).then(()=>{const b=document.querySelector('#st-copy-wrap .btn');b.textContent='Copied!';setTimeout(()=>b.textContent='Copy to clipboard',2000)})}
+function viewStatement(vetId,stmtId){const v=getVet(vetId);const s=v?.statements?.find(x=>x.id===stmtId);if(!s)return;const out=document.getElementById('st-output');out.textContent=s.text;out.classList.add('open');document.getElementById('st-copy-wrap').style.display='block';out.scrollIntoView({behavior:'smooth'})}
+function deleteStatement(vetId,stmtId){const v=getVet(vetId);if(!v)return;v.statements=v.statements?.filter(s=>s.id!==stmtId)||[];saveVets(veterans);renderStatements(v)}
+const VA_RATES={10:171.23,20:338.49,30:524.31,40:755.28,50:1075.16,60:1361.88,70:1716.28,80:1995.01,90:2241.91,100:3737.85};
+const DEP_ADD={sp:191.14,sp1:291.14,sp2:391.14,sp3:491.14,'1c':100.00};
+const SMC_RATES={none:0,k:139.87,s:898.28,sk:1038.15,l:1657.44,lk:1797.31,m:1988.18};
+let payRows=[];
+function openPayCalc(){const v=getActive();if(!v){alert('Select a veteran.');return}document.getElementById('pay-vet-label').textContent='Calculating for: '+v.name;payRows=(v.conditions||[]).map(c=>({id:c.id,cond:c.cond,current:c.pct,speculated:c.speculated||c.pct,bilateral:c.bilateral,dc:c.dc}));const smcMap={'S+K':'sk','S':'s','L+K':'lk','L':'l','K':'k','M':'m','none':'none'};document.getElementById('pay-smc-sel').value=smcMap[v.smc]||'none';renderPayRows();document.getElementById('pay-modal').classList.add('open')}
+function closePayModal(){document.getElementById('pay-modal').classList.remove('open')}
+function renderPayRows(){document.getElementById('pay-conditions').innerHTML=payRows.map(r=>'<div style="display:grid;grid-template-columns:1fr 90px 80px 24px;gap:6px;align-items:center;margin-bottom:6px"><div style="font-size:12px">'+r.cond+' <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">DC '+r.dc+'</span></div><input type="number" min="0" max="100" step="10" value="'+r.speculated+'" onchange="updatePayRow(''+r.id+'',this.value)" style="text-align:center;font-size:12px;padding:4px 6px" /><div style="font-family:var(--mono);font-size:11px;color:'+(r.speculated>r.current?'var(--green)':r.speculated<r.current?'var(--red)':'var(--text3)')+'">'+( r.speculated>r.current?'▲ +':'')+( r.speculated-r.current)+'%</div><button class="btn-sm" style="color:var(--red);padding:2px 5px" onclick="removePayRow(''+r.id+'')">&#10005;</button></div>').join('');calcPay()}
+function updatePayRow(id,val){const r=payRows.find(x=>x.id===id);if(r){r.speculated=parseInt(val)||0;calcPay()}}
+function removePayRow(id){payRows=payRows.filter(x=>x.id!==id);renderPayRows()}
+function addPayRow(){const cond=prompt('Condition:');if(!cond)return;payRows.push({id:'pr'+Date.now(),cond,current:0,speculated:10,bilateral:false,dc:'---'});renderPayRows()}
+function vaWholePerson(ratings){const s=[...ratings].filter(r=>r>0).sort((a,b)=>b-a);let rem=100;for(const r of s)rem*=(1-r/100);return Math.round(100-rem)}
+function calcPay(){
+  const specs=payRows.map(r=>r.speculated).filter(r=>r>0);
+  const bilat=payRows.filter(r=>r.bilateral&&r.speculated>0).map(r=>r.speculated);
+  let combined=vaWholePerson(specs);
+  let bilBonus=bilat.length>=2?Math.round(vaWholePerson(bilat)*0.1):0;
+  const withBil=Math.min(100,combined+bilBonus);
+  const rounded=withBil>=95?100:Math.round(withBil/10)*10;
+  const base=VA_RATES[rounded]||0;
+  const depEl=document.getElementById('pay-dep');
+  const smcEl=document.getElementById('pay-smc-sel');
+  const depKey=depEl?depEl.value:'0';
+  const smcKey=smcEl?smcEl.value:'none';
+  const depAdd=(rounded>=70&&depKey!=='0')?(DEP_ADD[depKey]||0):0;
+  const smcAdd=SMC_RATES[smcKey]||0;
+  const total=base+depAdd+smcAdd;
+  const confirmedBaseline=4776.00;
+  const deltaFromConfirmed=total-confirmedBaseline;
+  const lkTotal=base+depAdd+SMC_RATES['lk'];
+  const lTotal=base+depAdd+SMC_RATES['l'];
+  const el=document.getElementById('pay-total');
+  const lbl=document.getElementById('pay-label');
+  const det=document.getElementById('pay-detail');
+  if(el)el.textContent='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(lbl)lbl.textContent='Combined: '+rounded+'%'+(bilBonus?' (incl. '+bilBonus+'% bilateral bonus)':'')+(rounded>=95?' → rounded to 100%':'');
+  const smcLabels={none:'None',k:'SMC-K',s:'SMC-S',sk:'SMC-S + K',l:'SMC-L (A&A)',lk:'SMC-L + K',m:'SMC-M'};
+  if(det)det.innerHTML='<div class="pay-row"><span style="color:var(--text2)">Base rate ('+rounded+'% combined)</span><span style="font-family:var(--mono);font-weight:500">$'+base.toFixed(2)+'</span></div>'+(depAdd?'<div class="pay-row"><span style="color:var(--text2)">Dependents add-on</span><span style="font-family:var(--mono);color:var(--amber)">+$'+depAdd.toFixed(2)+'</span></div>':'')+'<div class="pay-row"><span style="color:var(--text2)">SMC add-on — '+(smcLabels[smcKey]||smcKey)+'</span><span style="font-family:var(--mono);color:var(--amber)">'+(smcAdd?'+$'+smcAdd.toFixed(2):'$0.00')+'</span></div><div class="pay-row" style="border-top:1px solid var(--border2);margin-top:2px;padding-top:10px"><span style="font-weight:500;color:var(--text)">Monthly Total</span><span style="font-family:var(--mono);font-weight:500;color:var(--green);font-size:16px">$'+total.toLocaleString('en-US',{minimumFractionDigits:2})+'</span></div><div class="pay-row"><span style="color:var(--text2)">Annual estimate</span><span style="font-family:var(--mono);color:var(--green)">$'+(total*12).toLocaleString('en-US',{minimumFractionDigits:2})+'</span></div>'+(deltaFromConfirmed!==0?'<div class="pay-row"><span style="color:var(--text2)">vs. your confirmed $4,776/mo baseline</span><span style="font-family:var(--mono);color:'+(deltaFromConfirmed>0?'var(--green)':'var(--amber)')+'">'+( deltaFromConfirmed>0?'+':'')+'$'+deltaFromConfirmed.toFixed(2)+'/mo</span></div>':'')+'<hr style="border:none;border-top:1px solid var(--border);margin:10px 0"><div class="pay-row"><span style="color:var(--text2)">Your actual SMC-S+K @ 100% P&T</span><span style="font-family:var(--mono);color:var(--green)">$4,776.00/mo ✓</span></div><hr style="border:none;border-top:1px solid var(--border);margin:10px 0"><div style="font-family:var(--mono);font-size:9px;color:var(--purple);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">SMC Upgrade Projections</div>'+(smcKey!=='l'?'<div class="pay-row"><span style="color:var(--text2)">If SMC-L (A&A)</span><span style="font-family:var(--mono);color:var(--purple)">$'+lTotal.toFixed(2)+'/mo <span style="font-size:10px;color:var(--text3)">(+$'+(lTotal-confirmedBaseline).toFixed(2)+' from current)</span></span></div>':'')+(smcKey!=='lk'?'<div class="pay-row"><span style="color:var(--text2)">If SMC-L + K</span><span style="font-family:var(--mono);color:var(--purple)">$'+lkTotal.toFixed(2)+'/mo <span style="font-size:10px;color:var(--text3)">(+$'+(lkTotal-confirmedBaseline).toFixed(2)+' from current)</span></span></div>':'')+'<div class="pay-row"><span style="color:var(--text2)">Annual gain at SMC-L+K vs current</span><span style="font-family:var(--mono);color:var(--purple)">+$'+((lkTotal-confirmedBaseline)*12).toLocaleString('en-US',{minimumFractionDigits:2})+'/yr</span></div>';
+}
+let stackItems=[];
+function openStackModal(){const v=getActive();if(!v){alert('Select a veteran.');return}document.getElementById('stack-vet-label').textContent='Analyzing: '+v.name;stackItems=(v.conditions||[]).filter(c=>c.pct>0||c.flag).map(c=>({...c,active:true}));renderStackChips();document.getElementById('stack-modal').classList.add('open')}
+function closeStackModal(){document.getElementById('stack-modal').classList.remove('open')}
+function renderStackChips(){document.getElementById('stack-chips').innerHTML=stackItems.map(c=>'<span class="stack-chip '+(c.active?'sc-on':'sc-off')+'" onclick="toggleStack(''+c.id+'')">'+(c.active?'✓':'+')+' '+c.cond+' '+c.pct+'%</span>').join('')}
+function toggleStack(id){const c=stackItems.find(x=>x.id===id);if(c){c.active=!c.active;renderStackChips()}}
+async function runStackAnalysis(){
+  const v=getActive();if(!v)return;
+  const active=stackItems.filter(c=>c.active).map(c=>c.cond+' '+c.pct+'% (DC '+c.dc+(c.bilateral?' bilateral':'')+')').join(', ');
+  const apiKey=getApiKey();if(!apiKey){alert('Enter your Anthropic API key in the sidebar first.');return}
+  const btn=document.getElementById('stack-btn');btn.disabled=true;btn.textContent='Analyzing...';
+  const out=document.getElementById('stack-output');const inner=document.getElementById('stack-inner');
+  out.classList.add('open');
+  inner.innerHTML='<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)"><div class="loading-dots"><span></span><span></span><span></span></div> Analyzing stacking for '+v.name+'...</div>';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,system:'You are a VA stacking specialist. Analyze ONLY this veteran's specific conditions. Respond ONLY in JSON: {"canStack":[{"conditions":"string","reason":"string","cite":"string"}],"conflicts":[{"conditions":"string","issue":"string"}],"sequence":["Step 1: string"],"smcPath":"string","estimatedCombined":"XX%","backPayNote":"string","topRecommendation":"string"}',messages:[{role:'user',content:buildVetContext(v)+'
+
+Selected conditions for stacking analysis: '+active+'
+
+Analyze what can stack, pyramiding conflicts, optimal sequence, SMC path, and provide a top recommendation.'}]})});
+    const data=await res.json();
+    const p=JSON.parse(data.content?.[0]?.text?.replace(/```json|```/g,'')||'{}');
+    inner.innerHTML='<div style="background:var(--green-dim);border:1px solid var(--green-b);border-radius:4px;padding:11px 13px;margin-bottom:12px;font-size:13px">'+(p.topRecommendation||'')+'</div>'+(p.smcPath?'<div style="margin-bottom:10px"><div style="font-family:var(--mono);font-size:9px;color:var(--purple);text-transform:uppercase;margin-bottom:4px">SMC Path</div><div style="font-size:12px;color:var(--text2)">'+p.smcPath+'</div></div>':'')+(p.canStack?.length?'<div style="font-family:var(--mono);font-size:9px;color:var(--green);text-transform:uppercase;margin-bottom:6px">Can Stack</div>'+p.canStack.map(s=>'<div class="strategy-box g"><strong style="color:var(--text)">'+s.conditions+'</strong><br>'+s.reason+' <span class="pill p-blue" style="font-size:9px">'+s.cite+'</span></div>').join(''):'')+(p.conflicts?.length?'<div style="font-family:var(--mono);font-size:9px;color:var(--amber);text-transform:uppercase;margin:10px 0 6px">Pyramiding Risks</div>'+p.conflicts.map(c=>'<div class="strategy-box a"><strong style="color:var(--text)">'+c.conditions+'</strong><br>'+c.issue+'</div>').join(''):'')+(p.sequence?.length?'<div style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;margin:10px 0 6px">Recommended Sequence</div>'+p.sequence.map(s=>'<div style="font-size:12px;color:var(--text2);padding:5px 0;border-bottom:1px solid var(--border)">'+s+'</div>').join(''):'')+(p.backPayNote?'<div style="margin-top:10px;background:var(--amber-dim);border:1px solid var(--amber-b);border-radius:4px;padding:10px;font-size:12px">💰 Back Pay: '+p.backPayNote+'</div>':'');
+  }catch(e){inner.innerHTML='<div style="color:var(--red);font-size:12px">Error: '+e.message+'</div>'}
+  btn.disabled=false;btn.textContent='⚡ Run Stacking Analysis';
+}
+function showTab(name){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab-btn').forEach(t=>t.classList.remove('active'));const panel=document.getElementById('tab-'+name);if(panel)panel.classList.add('active');if(event?.target)event.target.classList.add('active')}
+// ── VA PKCE OAuth Integration ───────────────────────────────────────────
+const VA_CLIENT_ID='0oa1bdltniuXCsMDG2p8';
+const VA_REDIRECT='https://blkmaze.github.io/va-claims-dashboard/';
+const VA_AUTH_URL='https://sandbox-api.va.gov/oauth2/veteran-service-history-and-eligibility/v1/authorization';
+const VA_TOKEN_URL='https://sandbox-api.va.gov/oauth2/veteran-service-history-and-eligibility/v1/token';
+const VA_SCOPES='openid profile service_history.read disability_rating.read veteran_status.read';
+function randomString(len=43){const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';return Array.from(crypto.getRandomValues(new Uint8Array(len))).map(b=>chars[b%chars.length]).join('')}
+async function sha256b(plain){const enc=new TextEncoder();const data=enc.encode(plain);const hash=await crypto.subtle.digest('SHA-256',data);return hash}
+function b64url(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/+/g,'-').replace(///g,'_').replace(/=+$/,'')}
+async function vaLogin(){const verifier=randomString(64);const challenge=b64url(await sha256b(verifier));const state=randomString(16);sessionStorage.setItem('va_verifier',verifier);sessionStorage.setItem('va_state',state);const params=new URLSearchParams({client_id:VA_CLIENT_ID,redirect_uri:VA_REDIRECT,response_type:'code',scope:VA_SCOPES,state,code_challenge:challenge,code_challenge_method:'S256'});window.location.href=VA_AUTH_URL+'?'+params.toString()}
+async function vaHandleCallback(){const params=new URLSearchParams(window.location.search);const code=params.get('code');const state=params.get('state');if(!code)return;const storedState=sessionStorage.getItem('va_state');if(state!==storedState){alert('OAuth state mismatch. Please try again.');return}const verifier=sessionStorage.getItem('va_verifier');const body=new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:VA_REDIRECT,client_id:VA_CLIENT_ID,code_verifier:verifier});try{const resp=await fetch(VA_TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});const tokens=await resp.json();if(tokens.access_token){sessionStorage.setItem('va_token',tokens.access_token);window.history.replaceState({},'',VA_REDIRECT);await vaSyncVet(tokens.access_token);vaUpdateUI(true)}else{console.error('Token error:',tokens);vaUpdateUI(false,'Token error')}}catch(e){console.error(e);vaUpdateUI(false,'Network error')}}
+async function vaSyncVet(token){const headers={'Authorization':'Bearer '+token,'Accept':'application/json'};const base='https://sandbox-api.va.gov/services/veteran_verification/v2';try{const[statusR,ratingR,histR]=await Promise.all([fetch(base+'/status',{headers}),fetch(base+'/disability_rating',{headers}),fetch(base+'/service_history',{headers})]);const[statusD,ratingD,histD]=await Promise.all([statusR.json(),ratingR.json(),histR.json()]);const vaAlert=[];if(ratingD.data?.attributes?.combined_disability_rating!==undefined)vaAlert.push('Combined Rating: '+ratingD.data.attributes.combined_disability_rating+'%');if(histD.data?.length){const ep=histD.data[0].attributes;vaAlert.push('Service: '+ep.branch_of_service+' '+ep.start_date+' – '+(ep.end_date||'Present'))}if(vaAlert.length)showVAAlert('VA Data Synced ✓
+'+vaAlert.join('
+'))}catch(e){console.error('VA sync error:',e)}}
+function vaLogout(){sessionStorage.removeItem('va_token');sessionStorage.removeItem('va_verifier');sessionStorage.removeItem('va_state');vaUpdateUI(false)}
+function vaUpdateUI(loggedIn,errMsg){const btn=document.getElementById('va-login-btn');const status=document.getElementById('va-status');if(!btn)return;if(loggedIn){btn.textContent='✅ VA Connected';btn.onclick=vaLogout;btn.style.background='var(--green)'}else{btn.textContent='🔐 Login with VA.gov';btn.onclick=vaLogin;btn.style.background=''}if(status)status.textContent=errMsg||''}
+function showVAAlert(msg){const div=document.createElement('div');div.style.cssText='position:fixed;top:20px;right:20px;background:var(--bg2);border:1px solid var(--green);border-radius:8px;padding:16px;z-index:9999;max-width:320px;white-space:pre-line;color:var(--text);font-size:12px';div.textContent=msg;const x=document.createElement('button');x.textContent='✕';x.style.cssText='float:right;background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;margin-left:8px';x.onclick=()=>div.remove();div.prepend(x);document.body.appendChild(div);setTimeout(()=>div.remove(),8000)}
+// Init
+const storedKey=localStorage.getItem('vso_api_key')||'';
+const keyInput=document.getElementById('api-key-input');
+if(keyInput&&storedKey){keyInput.value=storedKey;const s=document.getElementById('api-key-status');if(s)s.textContent='Key saved'}
+renderSidebar();
+if(activeVetId&&getVet(activeVetId))renderWorkspace();
+else if(veterans.length>0){activeVetId=veterans[0].id;localStorage.setItem('vso_active',activeVetId);renderSidebar();renderWorkspace()}
+window.addEventListener('load',()=>{if(new URLSearchParams(window.location.search).has('code'))vaHandleCallback();if(sessionStorage.getItem('va_token'))vaUpdateUI(true)});
+</script>
+</body>
+</html>
