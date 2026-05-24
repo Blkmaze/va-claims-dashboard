@@ -394,7 +394,7 @@ select option{background:var(--bg2)}
     </div>
     <div style="display:flex;gap:8px"><button class="btn btn-green" onclick="saveAppt()">Save Appointment</button><button class="btn btn-gray" onclick="closeApptModal()">Cancel</button></div>
   </div>
-</div><script><script>
+</div><script>
 function loadVets(){try{return JSON.parse(localStorage.getItem('vso_veterans')||'[]')}catch(e){return[]}}
 function saveVets(v){localStorage.setItem('vso_veterans',JSON.stringify(v))}
 function saveApiKey(v){localStorage.setItem('vso_api_key',v);const s=document.getElementById('api-key-status');if(s)s.textContent=v?'Key saved':'Not set'}
