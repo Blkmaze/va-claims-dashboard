@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VA Claims Manager — VSO Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0e17;--bg2:#0f1520;--bg3:#151d2e;--bg4:#1a2236;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#e8eaf0;--text2:#8892a4;--text3:#4a5568;
+  --blue:#3b82f6;--blue-dim:rgba(59,130,246,0.12);--blue-b:rgba(59,130,246,0.3);
+  --green:#10b981;--green-dim:rgba(16,185,129,0.12);--green-b:rgba(16,185,129,0.3);
+  --amber:#f59e0b;--amber-dim:rgba(245,158,11,0.12);--amber-b:rgba(245,158,11,0.3);
+  --red:#ef4444;--red-dim:rgba(239,68,68,0.12);--red-b:rgba(239,68,68,0.3);
+  --purple:#8b5cf6;--purple-dim:rgba(139,92,246,0.12);--purple-b:rgba(139,92,246,0.3);
+  --teal:#14b8a6;--teal-dim:rgba(20,184,166,0.12);--teal-b:rgba(20,184,166,0.3);
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  --sidebar:260px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;display:flex}
+.sidebar{width:var(--sidebar);min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto}
+.sidebar-logo{padding:18px 16px 14px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-family:var(--mono);font-size:11px;color:var(--blue);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:2px}
+.sidebar-logo p{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.sidebar-section{padding:10px 12px 4px;font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em}
+.vet-entry{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;border-left:2px solid transparent;transition:all 0.15s}
+.vet-entry:hover{background:rgba(255,255,255,0.03)}
+.vet-entry.active{background:var(--blue-dim);border-left-color:var(--blue)}
+.vet-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:500;flex-shrink:0}
+.vet-entry-info{flex:1;min-width:0}
+.vet-entry-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vet-entry-meta{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.vet-entry-pct{font-family:var(--mono);font-size:12px;font-weight:500}
+.add-vet-btn{margin:12px;padding:8px;border:1px dashed var(--border2);border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--text3);background:transparent;text-align:center;transition:all 0.15s}
+.add-vet-btn:hover{border-color:var(--blue-b);color:var(--blue)}
+.main{margin-left:var(--sidebar);flex:1;min-height:100vh;display:flex;flex-direction:column}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:50}
+.topbar-vet{display:flex;align-items:center;gap:12px}
+.topbar-name{font-size:15px;font-weight:500}
+.topbar-meta{font-size:11px;color:var(--text2);font-family:var(--mono)}
+.topbar-pills{display:flex;gap:6px;flex-wrap:wrap}
+.topbar-actions{display:flex;gap:6px;flex-wrap:wrap}
+.content{padding:24px;flex:1}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;overflow-x:auto}
+.tab-btn{font-family:var(--mono);font-size:11px;font-weight:500;padding:9px 14px;cursor:pointer;color:var(--text3);background:transparent;border:none;border-bottom:2px solid transparent;letter-spacing:0.04em;text-transform:uppercase;white-space:nowrap;transition:all 0.15s}
+.tab-btn:hover{color:var(--text2)}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+.panel{display:none;animation:fadeIn 0.2s ease}
+.panel.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.sec{font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin:18px 0 8px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:14px 16px;margin-bottom:10px}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.metric{background:var(--bg3);border-radius:4px;padding:12px 14px}
+.metric-label{font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px}
+.metric-value{font-family:var(--mono);font-size:22px;font-weight:500;line-height:1}
+.metric-sub{font-size:11px;color:var(--text2);margin-top:3px}
+.pill{font-family:var(--mono);font-size:10px;font-weight:500;padding:3px 8px;border-radius:2px;letter-spacing:0.04em;display:inline-block}
+.p-green{background:var(--green-dim);color:var(--green);border:1px solid var(--green-b)}
+.p-blue{background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue-b)}
+.p-amber{background:var(--amber-dim);color:var(--amber);border:1px solid var(--amber-b)}
+.p-purple{background:var(--purple-dim);color:var(--purple);border:1px solid var(--purple-b)}
+.p-red{background:var(--red-dim);color:var(--red);border:1px solid var(--red-b)}
+.p-teal{background:var(--teal-dim);color:var(--teal);border:1px solid var(--teal-b)}
+.p-gray{background:rgba(255,255,255,0.05);color:var(--text3);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{font-family:var(--mono);font-size:10px;color:var(--text3);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em}
+td{padding:9px 8px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,0.02)}
+.bar-wrap{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;flex:1}
+.bar-fill{height:100%;border-radius:2px;transition:width 0.4s}
+input[type=text],input[type=number],input[type=date],select,textarea{background:var(--bg3);border:1px solid var(--border2);border-radius:2px;color:var(--text);font-family:var(--mono);font-size:12px;padding:7px 10px;width:100%;outline:none;transition:border-color 0.15s}
+input:focus,select:focus,textarea:focus{border-color:var(--blue)}
+textarea{resize:vertical;min-height:70px}
+select option{background:var(--bg2)}
+.btn{font-family:var(--mono);font-size:11px;font-weight:500;padding:7px 16px;border-radius:2px;cursor:pointer;letter-spacing:0.04em;text-transform:uppercase;transition:all 0.15s;border:1px solid}
+.btn-blue{background:var(--blue-dim);border-color:var(--blue-b);color:var(--blue)}
+.btn-blue:hover{background:rgba(59,130,246,0.2)}
+.btn-green{background:var(--green-dim);border-color:var(--green-b);color:var(--green)}
+.btn-green:hover{background:rgba(16,185,129,0.2)}
+.btn-amber{background:var(--amber-dim);border-color:var(--amber-b);color:var(--amber)}
+.btn-purple{background:var(--purple-dim);border-color:var(--purple-b);color:var(--purple)}
+.btn-gray{background:var(--bg3);border-color:var(--border2);color:var(--text2)}
+.btn-gray:hover{border-color:var(--blue-b);color:var(--blue)}
+.btn-red{background:var(--red-dim);border-color:var(--red-b);color:var(--red)}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+.btn-sm{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:2px;cursor:pointer;border:1px solid var(--border2);color:var(--text2);background:var(--bg3);transition:all 0.15s}
+.btn-sm:hover{border-color:var(--blue-b);color:var(--blue)}
+.igrid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.igrid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+.igroup{display:flex;flex-direction:column;gap:4px}
+.ilabel{font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em}
+.alert{border-radius:4px;padding:11px 13px;font-size:12px;margin-bottom:10px;display:flex;gap:9px;align-items:flex-start;line-height:1.6}
+.alert-blue{background:var(--blue-dim);border:1px solid var(--blue-b);color:#93c5fd}
+.alert-amber{background:var(--amber-dim);border:1px solid var(--amber-b);color:#fcd34d}
+.alert-green{background:var(--green-dim);border:1px solid var(--green-b);color:#6ee7b7}
+.alert-red{background:var(--red-dim);border:1px solid var(--red-b);color:#fca5a5}
+.loading-dots{display:inline-flex;gap:4px}
+.loading-dots span{width:5px;height:5px;border-radius:50%;background:var(--blue);animation:bounce 1.2s infinite}
+.loading-dots span:nth-child(2){animation-delay:0.2s}
+.loading-dots span:nth-child(3){animation-delay:0.4s}
+@keyframes bounce{0%,80%,100%{transform:scale(0.6);opacity:0.4}40%{transform:scale(1);opacity:1}}
+.agent-box{background:var(--bg3);border:1px solid var(--blue-b);border-radius:4px;padding:14px;margin-top:10px;font-size:12px;line-height:1.7;color:var(--text2);display:none}
+.agent-box.open{display:block;animation:fadeIn 0.3s ease}
+.agent-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);animation:pulse 2s infinite;display:inline-block;margin-right:6px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.spec-big{font-family:var(--mono);font-size:32px;font-weight:500;color:var(--green);line-height:1}
+.process-bar{display:flex;gap:3px;margin:8px 0}
+.process-seg{flex:1;height:6px;border-radius:2px;cursor:pointer;transition:background 0.15s}
+.action-row{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px}
+.action-row:last-child{border-bottom:none}
+.chk{width:16px;height:16px;border-radius:2px;border:1px solid var(--border2);cursor:pointer;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+.chk.done{background:var(--green);border-color:var(--green)}
+.stmt-out{background:var(--bg3);border:1px solid var(--green-b);border-radius:4px;padding:16px;margin-top:12px;font-size:13px;line-height:1.85;white-space:pre-wrap;display:none}
+.stmt-out.open{display:block;animation:fadeIn 0.3s ease}
+.pay-big{font-family:var(--mono);font-size:40px;font-weight:500;color:var(--green);line-height:1}
+.pay-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+.pay-row:last-child{border-bottom:none}
+.stack-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:2px;font-size:11px;font-family:var(--mono);margin:2px;cursor:pointer;border:1px solid;transition:all 0.15s}
+.sc-on{background:var(--green-dim);color:var(--green);border-color:var(--green-b)}
+.sc-off{background:var(--bg3);color:var(--text3);border-color:var(--border)}
+.strategy-box{background:var(--bg3);border-left:3px solid var(--blue);border-radius:0 4px 4px 0;padding:11px 13px;margin-bottom:8px;font-size:12px;line-height:1.7;color:var(--text2)}
+.strategy-box.g{border-left-color:var(--green)}
+.strategy-box.a{border-left-color:var(--amber)}
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:200;display:none;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--blue-b);border-radius:6px;width:700px;max-width:95vw;max-height:90vh;overflow-y:auto;padding:22px;position:relative;animation:fadeIn 0.2s ease}
+.modal-title{font-family:var(--mono);font-size:12px;color:var(--blue);font-weight:500;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px}
+.modal-sub{font-size:12px;color:var(--text2);margin-bottom:16px}
+.modal-close{position:absolute;top:14px;right:14px;font-family:var(--mono);font-size:10px;color:var(--text3);cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:2px;padding:3px 8px}
+.modal-close:hover{color:var(--text)}
+.welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:40px}
+.welcome h2{font-family:var(--mono);font-size:16px;color:var(--text);margin-bottom:8px}
+.welcome p{font-size:13px;color:var(--text2);max-width:420px;line-height:1.7;margin-bottom:24px}
+.wizard-step{display:none}.wizard-step.active{display:block;animation:fadeIn 0.2s ease}
+.wizard-progress{display:flex;gap:4px;margin-bottom:20px}
+.wstep{flex:1;height:4px;border-radius:2px;background:var(--bg3);transition:background 0.3s}
+.wstep.done{background:var(--green)}
+.wstep.active{background:var(--blue)}
+.scanline{position:fixed;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.02) 2px,rgba(0,0,0,0.02) 4px);pointer-events:none;z-index:0}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+@media(max-width:800px){
+  .sidebar{width:200px}
+  .main{margin-left:200px}
+  .metric-grid{grid-template-columns:repeat(2,1fr)}
+  .igrid2,.igrid3{grid-template-columns:1fr}
+}
+</style>
+</head>
+<div style="padding:10px 14px;border-top:1px solid var(--border)" id="va-auth-panel">
+  <div id="va-auth-status" style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:6px">VA.gov — Not connected</div>
+  <button id="va-login-btn" class="btn btn-blue" style="width:100%;font-size:10px;padding:6px" onclick="vaLogin()">🔐 Login with VA.gov</button>
+  <button id="va-logout-btn" class="btn btn-gray" style="width:100%;font-size:10px;padding:6px;display:none" onclick="vaLogout()">Disconnect VA.gov</button>
+  <button id="va-sync-btn" class="btn btn-green" style="width:100%;font-size:10px;padding:6px;margin-top:4px;display:none" onclick="vaSyncVet()">⟳ Sync from VA.gov</button>
+</div>
+
+<script>
+const VA_CLIENT_ID='0oa1bdltniuXCsMDG2p8';
+const VA_REDIRECT_URI='https://blkmaze.github.io/va-claims-dashboard/';
+const VA_AUTH_URL='https://sandbox-api.va.gov/oauth2/veteran-service-history-and-eligibility/v1/authorization';
+const VA_TOKEN_URL='https://sandbox-api.va.gov/oauth2/veteran-service-history-and-eligibility/v1/token';
+const VA_API_BASE='https://sandbox-api.va.gov/services/veteran_verification/v2';
+function randomString(len){const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';return Array.from(crypto.getRandomValues(new Uint8Array(len))).map(b=>chars[b%chars.length]).join('');}
+async function sha256b(plain){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(plain));}
+function b64url(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
+async function vaLogin(){const cv=randomString(64);const ch=b64url(await sha256b(cv));const st=randomString(16);sessionStorage.setItem('va_cv',cv);sessionStorage.setItem('va_st',st);window.location.href=VA_AUTH_URL+'?'+new URLSearchParams({client_id:VA_CLIENT_ID,redirect_uri:VA_REDIRECT_URI,response_type:'code',scope:'service_history.read disability_rating.read veteran_status.read',state:st,code_challenge:ch,code_challenge_method:'S256'});}
+async function vaHandleCallback(){const p=new URLSearchParams(window.location.search);const code=p.get('code');if(!code)return;if(p.get('state')!==sessionStorage.getItem('va_st'))return;try{const r=await fetch(VA_TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',client_id:VA_CLIENT_ID,redirect_uri:VA_REDIRECT_URI,code,code_verifier:sessionStorage.getItem('va_cv')})});const t=await r.json();if(t.access_token){localStorage.setItem('va_access_token',t.access_token);localStorage.setItem('va_token_expiry',Date.now()+(t.expires_in*1000));sessionStorage.removeItem('va_cv');sessionStorage.removeItem('va_st');window.history.replaceState({},document.title,VA_REDIRECT_URI);vaUpdateUI(true);showVAAlert('VA.gov connected! Click Sync.','green');}else showVAAlert('Login failed: '+(t.error_description||t.error),'red');}catch(e){showVAAlert('Error: '+e.message,'red');}}
+async function vaSyncVet(){const token=localStorage.getItem('va_access_token');if(!token){showVAAlert('Login with VA.gov first.','amber');return;}const v=getActive();if(!v){showVAAlert('Select a veteran first.','amber');return;}const btn=document.getElementById('va-sync-btn');btn.textContent='Syncing...';btn.disabled=true;try{const[rR,hR]=await Promise.all([fetch(VA_API_BASE+'/disability_rating',{headers:{Authorization:'Bearer '+token}}),fetch(VA_API_BASE+'/service_history',{headers:{Authorization:'Bearer '+token}})]);const[rD,hD]=await Promise.all([rR.json(),hR.json()]);if(rD.data?.attributes){const a=rD.data.attributes;v.combined=a.combined_disability_rating||v.combined;const ir=a.individual_ratings||[];if(ir.length)v.conditions=ir.map((r,i)=>({id:'va_'+i,cond:r.diagnostic_text||'Unknown',pct:r.rating_percentage||0,dc:r.diagnostic_code?'DC '+r.diagnostic_code:'—',eff:r.effective_date?new Date(r.effective_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—',bilateral:(r.diagnostic_text||'').toLowerCase().includes('bilateral'),flag:r.static_ind==='Y'?'P&T':'',speculated:r.rating_percentage||0}));}if(hD.data?.length){const s=hD.data[0].attributes;v.branch=s.branch_of_service||v.branch;v.service=(s.start_date?new Date(s.start_date).getFullYear():'')+'–'+(s.end_date?new Date(s.end_date).getFullYear():'Present');}v.vaLastSync=new Date().toLocaleString();saveVets(veterans);renderSidebar();renderWorkspace();showVAAlert('Synced — '+v.combined+'% combined, '+(v.conditions?.length||0)+' conditions.','green');}catch(e){showVAAlert('Sync error: '+e.message,'red');}btn.textContent='⟳ Sync from VA.gov';btn.disabled=false;}
+function vaLogout(){localStorage.removeItem('va_access_token');localStorage.removeItem('va_token_expiry');vaUpdateUI(false);}
+function vaUpdateUI(on){const lb=document.getElementById('va-login-btn'),lo=document.getElementById('va-logout-btn'),sy=document.getElementById('va-sync-btn'),st=document.getElementById('va-auth-status');if(!lb)return;lb.style.display=on?'none':'block';lo.style.display=on?'block':'none';sy.style.display=on?'block':'none';st.style.color=on?'var(--green)':'var(--text3)';st.textContent=on?'✓ VA.gov connected':'VA.gov — Not connected';}
+function showVAAlert(msg,type){const el=document.createElement('div');el.className='alert alert-'+type;el.style.cssText='position:fixed;bottom:20px;right:20px;z-index:999;max-width:360px;animation:fadeIn 0.3s ease';el.innerHTML='<span>'+(type==='green'?'✓':type==='red'?'✕':'⚠')+'</span><div>'+msg+'</div>';document.body.appendChild(el);setTimeout(()=>el.remove(),5000);}
+(function(){const p=new URLSearchParams(window.location.search);if(p.get('code'))vaHandleCallback();const t=localStorage.getItem('va_access_token'),e=localStorage.getItem('va_token_expiry');vaUpdateUI(!!(t&&e&&Date.now()<+e));})();
+</script>
+<body>
+<div class="scanline"></div>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <h1>// VA Claims Mgr</h1>
+    <p>VSO Multi-Veteran System</p>
+  </div>
+  <div class="sidebar-section">Veterans</div>
+  <div id="vet-list"></div>
+  <button class="add-vet-btn" onclick="openAddVet()">+ Add Veteran</button>
+  <div style="flex:1"></div>
+  <div style="padding:12px 14px;border-top:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--text3)">
+    Data stored locally · localStorage<br>
+    Agent powered by Claude Sonnet<br><br>
+    <label style="color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Anthropic API Key</label>
+    <input type="password" id="api-key-input"
+      placeholder="sk-ant-..."
+      style="width:100%;margin-top:5px;font-size:10px;padding:5px 7px;background:var(--bg3);border:1px solid var(--border2);border-radius:2px;color:var(--text);font-family:var(--mono);outline:none"
+      oninput="localStorage.setItem('vso_api_key',this.value)"
+    />
+    <div id="api-key-status" style="font-size:9px;margin-top:3px;color:var(--text3)">Not set</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar" id="topbar">
+    <div class="topbar-vet">
+      <div id="topbar-avatar" style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:500;flex-shrink:0;background:var(--bg3);color:var(--text3)">?</div>
+      <div>
+        <div class="topbar-name" id="topbar-name">Select a Veteran</div>
+        <div class="topbar-meta" id="topbar-meta">No veteran selected</div>
+      </div>
+    </div>
+    <div class="topbar-pills" id="topbar-pills"></div>
+    <div class="topbar-actions">
+      <button class="btn btn-green" onclick="openClaimWizard()">+ File Claim</button>
+      <button class="btn btn-blue" onclick="openPayCalc()">💰 Pay Calc</button>
+      <button class="btn btn-purple" onclick="openStackModal()">🔗 Stacking</button>
+      <button class="btn btn-gray" onclick="editCurrentVet()">Edit Profile</button>
+    </div>
+  </div>
+
+  <div class="content" id="main-content">
+    <div class="welcome" id="welcome-screen">
+      <h2>// VA Claims Manager</h2>
+      <p>Select a veteran from the sidebar or add a new one to get started. Every veteran has their own independent profile, claims, payment calculator, stacking analysis, and statement builder.</p>
+      <button class="btn btn-blue" onclick="openAddVet()">+ Add First Veteran</button>
+    </div>
+
+    <div id="vet-workspace" style="display:none">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
+        <button class="tab-btn" onclick="showTab('conditions')">Conditions</button>
+        <button class="tab-btn" onclick="showTab('claims')">Claims</button>
+        <button class="tab-btn" onclick="showTab('appointments')">Appointments</button>
+        <button class="tab-btn" onclick="showTab('smc')">SMC</button>
+        <button class="tab-btn" onclick="showTab('agent')">⚡ Agent</button>
+        <button class="tab-btn" onclick="showTab('statements')">📄 Statements</button>
+        <button class="tab-btn" onclick="showTab('actions')">Actions</button>
+      </div>
+
+      <div id="tab-overview" class="panel active">
+        <div class="metric-grid" id="ov-metrics"></div>
+        <div class="sec">Active Claims</div>
+        <div class="card" id="ov-claims-table"></div>
+        <div class="sec">Evidence on File</div>
+        <div class="card" id="ov-evidence"></div>
+        <div class="sec">Context-Aware Suggestions</div>
+        <div id="ov-suggestions"></div>
+      </div>
+
+      <div id="tab-conditions" class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:13px;color:var(--text2)">All service-connected conditions for this veteran</div>
+          <button class="btn btn-green" onclick="openAddCondition()">+ Add Condition</button>
+        </div>
+        <div class="card" id="conditions-table"></div>
+        <div class="sec">Add / Edit Condition</div>
+        <div class="card" id="condition-form-wrap" style="display:none"></div>
+      </div>
+
+      <div id="tab-claims" class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:13px;color:var(--text2)">Claim pipeline for this veteran</div>
+          <button class="btn btn-green" onclick="openClaimWizard()">+ File New Claim</button>
+        </div>
+        <div id="claims-list"></div>
+      </div>
+
+      <div id="tab-appointments" class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:13px;color:var(--text2)">Upcoming and past appointments</div>
+          <button class="btn btn-blue" onclick="openAddAppt()">+ Add Appointment</button>
+        </div>
+        <div class="card" id="appts-list"></div>
+      </div>
+
+      <div id="tab-smc" class="panel">
+        <div class="metric-grid" style="grid-template-columns:repeat(2,1fr)" id="smc-metrics"></div>
+        <div class="sec">SMC Tier Analysis — 38 U.S.C. § 1114</div>
+        <div class="card" id="smc-tier-list"></div>
+        <div class="sec">SMC-L Aid & Attendance Pathway</div>
+        <div class="card" id="smc-l-checklist"></div>
+        <div id="smc-agent-box" class="agent-box open" style="margin-top:10px"></div>
+      </div>
+
+      <div id="tab-agent" class="panel">
+        <div class="alert alert-blue"><span>⚡</span><div>Type a condition name — the agent pulls matching details from this veteran's profile automatically. All speculations are scoped to this veteran only.</div></div>
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="agent-dot"></span><span style="font-family:var(--mono);font-size:11px;color:var(--blue)">// AGENT SPECULATION ENGINE</span></div>
+          <div class="igrid2">
+            <div class="igroup" style="position:relative">
+              <label class="ilabel">Condition / Development</label>
+              <input type="text" id="ag-condition" placeholder="e.g. Kidney, Neuropathy, PTSD increase" oninput="agentAutoFill()" autocomplete="off" />
+              <div id="ag-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--blue-b);border-radius:0 0 4px 4px;z-index:50;max-height:160px;overflow-y:auto"></div>
+            </div>
+            <div class="igroup"><label class="ilabel">Diagnostic Code</label><input type="text" id="ag-dc" placeholder="Auto-filled from profile or enter manually" /></div>
+            <div class="igroup"><label class="ilabel">Claim Type</label><select id="ag-type"><option>New SC condition</option><option>Secondary to existing SC</option><option>Rating increase</option><option>SMC upgrade</option><option>C&P exam outcome</option></select></div>
+            <div class="igroup"><label class="ilabel">Secondary To</label><input type="text" id="ag-secondary" placeholder="Auto-filled or enter manually" /></div>
+          </div>
+          <div class="igroup" style="margin-bottom:6px"><label class="ilabel">Evidence / Notes</label><textarea id="ag-notes" placeholder="Describe symptoms, exam findings, documents on file..."></textarea></div>
+          <div id="ag-pulled-context" style="display:none;background:var(--bg3);border:1px solid var(--green-b);border-radius:4px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:var(--green)"></div>
+          <button class="btn btn-blue" id="ag-btn" onclick="runAgentSpec()">⚡ Run Speculation</button>
+          <div class="agent-box" id="ag-output"><div id="ag-inner"></div></div>
+        </div>
+        <div class="sec">Saved Speculations</div>
+        <div id="agent-saved-list"></div>
+      </div>
+
+      <div id="tab-statements" class="panel">
+        <div class="alert alert-blue"><span>📄</span><div>Generate ready-to-file statements pre-filled with this veteran's records. Each document is specific to this veteran — not shared with others.</div></div>
+        <div class="card">
+          <div class="igrid2">
+            <div class="igroup"><label class="ilabel">Statement Type</label>
+              <select id="st-type">
+                <option value="personal">Personal Statement (VA Form 21-4138)</option>
+                <option value="buddy">Buddy Statement (Lay Evidence)</option>
+                <option value="nexus">Nexus Letter (draft for physician)</option>
+                <option value="cp_prep">C&P Exam Prep Notes</option>
+                <option value="smc_l">SMC-L Aid & Attendance Narrative</option>
+                <option value="nod">Notice of Disagreement Response</option>
+                <option value="itf">Intent to File Memo</option>
+              </select>
+            </div>
+            <div class="igroup"><label class="ilabel">Target Condition</label><input type="text" id="st-condition" placeholder="e.g. PTSD, Knee, Tinnitus" /></div>
+          </div>
+          <div class="igroup" style="margin-bottom:10px"><label class="ilabel">Additional Symptoms / Context</label><textarea id="st-context" placeholder="Specific symptoms, dates, functional impact..."></textarea></div>
+          <div class="igroup" style="margin-bottom:12px"><label class="ilabel">Author (buddy statement — blank if self)</label><input type="text" id="st-author" placeholder="e.g. James Carter, fellow veteran 2003–2007" /></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-blue" id="st-btn" onclick="generateStatement()">📄 Generate Statement</button>
+            <button class="btn btn-amber" onclick="generateStrategy()">⚡ Claim Strategy</button>
+          </div>
+          <div class="stmt-out" id="st-output"></div>
+          <div id="st-copy-wrap" style="display:none;margin-top:8px"><button class="btn btn-gray" onclick="copyStmt()" style="font-size:10px;padding:4px 12px">Copy to clipboard</button></div>
+          <div class="agent-box" id="strategy-box"><div id="strategy-inner"></div></div>
+        </div>
+        <div class="sec">Saved Statements</div>
+        <div id="saved-statements-list"></div>
+      </div>
+
+      <div id="tab-actions" class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:13px;color:var(--text2)">Action checklist for this veteran</div>
+          <button class="btn btn-green" onclick="addAction()">+ Add Action</button>
+        </div>
+        <div class="card" id="actions-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD/EDIT VETERAN MODAL -->
+<div class="overlay" id="add-vet-modal" onclick="if(event.target===this)closeAddVet()">
+  <div class="modal" style="width:760px">
+    <button class="modal-close" onclick="closeAddVet()">✕ Close</button>
+    <div class="modal-title" id="add-vet-title">// Add New Veteran</div>
+    <div class="modal-sub">All fields are stored locally. Build the profile and the agent will use it for all speculations and statements.</div>
+    <div class="igrid3">
+      <div class="igroup"><label class="ilabel">Full Name</label><input type="text" id="nv-name" placeholder="First Last" /></div>
+      <div class="igroup"><label class="ilabel">Branch</label>
+        <select id="nv-branch"><option>Army</option><option>Navy</option><option>Marine Corps</option><option>Air Force</option><option>Space Force</option><option>Coast Guard</option></select>
+      </div>
+      <div class="igroup"><label class="ilabel">Era / Conflict</label><input type="text" id="nv-era" placeholder="e.g. OIF/OEF, Vietnam, Gulf War" /></div>
+      <div class="igroup"><label class="ilabel">Service Dates</label><input type="text" id="nv-service" placeholder="e.g. 2001–2009" /></div>
+      <div class="igroup"><label class="ilabel">Current Combined %</label><input type="number" id="nv-combined" min="0" max="100" step="10" placeholder="e.g. 70" /></div>
+      <div class="igroup"><label class="ilabel">P&T Status</label>
+        <select id="nv-pt"><option value="no">Not P&T</option><option value="yes">P&T</option><option value="unknown">Unknown</option></select>
+      </div>
+      <div class="igroup"><label class="ilabel">SMC Level</label>
+        <select id="nv-smc"><option value="none">None</option><option value="K">SMC-K</option><option value="S">SMC-S</option><option value="S+K">SMC-S+K</option><option value="L">SMC-L</option><option value="L+K">SMC-L+K</option><option value="M">SMC-M</option></select>
+      </div>
+      <div class="igroup"><label class="ilabel">PACT Act Eligible</label>
+        <select id="nv-pact"><option value="unknown">Unknown</option><option value="yes">Yes</option><option value="no">No</option></select>
+      </div>
+      <div class="igroup"><label class="ilabel">VSO Rep / File #</label><input type="text" id="nv-file" placeholder="e.g. DAV / C-file #12345" /></div>
+    </div>
+    <div class="igroup" style="margin-bottom:10px"><label class="ilabel">Service-Connected Conditions (one per line: Condition | % | DC | Effective Date)</label>
+      <textarea id="nv-conditions" style="min-height:100px" placeholder="PTSD | 70% | DC 9411 | March 2015&#10;Tinnitus | 10% | DC 5284 | March 2015&#10;Lumbar strain | 20% | DC 5237 | June 2018"></textarea>
+    </div>
+    <div class="igroup" style="margin-bottom:10px"><label class="ilabel">Evidence on File (one per line)</label>
+      <textarea id="nv-evidence" style="min-height:70px" placeholder="Buddy statement from John Smith&#10;IMO from Dr. Jones dated Jan 2025&#10;Service records showing IED exposure"></textarea>
+    </div>
+    <div class="igroup" style="margin-bottom:10px"><label class="ilabel">Pending / Notes</label>
+      <textarea id="nv-notes" style="min-height:60px" placeholder="Supplemental claim filed for knee, C&P scheduled June 2026..."></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-green" onclick="saveVeteran()">Save Veteran</button>
+      <button class="btn btn-gray" onclick="closeAddVet()">Cancel</button>
+      <button class="btn btn-red" id="delete-vet-btn" style="display:none" onclick="deleteCurrentVet()">Delete Veteran</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLAIM FILING WIZARD -->
+<div class="overlay" id="claim-wizard-modal" onclick="if(event.target===this)closeClaimWizard()">
+  <div class="modal" style="width:740px">
+    <button class="modal-close 
