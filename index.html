@@ -237,7 +237,7 @@ select option{background:var(--bg2)}
         <div id="smc-agent-box" class="agent-box open" style="margin-top:10px"></div>
       </div>
       <div id="tab-agent" class="panel">
-        <div class="alert alert-blue"><span>&#9889;</span><div>Enter any condition, evidence, or development. The agent speculates rating outcome using 38 CFR Part 4, USC citations, and this veteran's specific profile &mdash; not anyone else's.</div></div>
+        <div class="alert alert-blue"><span>&#9889;</span><div>Enter any condition, evidence, or development. The agent speculates rating outcome using 38 CFR Part 4, USC citations, and this veteran\'s specific profile &mdash; not anyone else's.</div></div>
         <div class="card">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="agent-dot"></span><span style="font-family:var(--mono);font-size:11px;color:var(--blue)">// AGENT SPECULATION ENGINE</span></div>
           <div class="igrid2">
@@ -253,7 +253,7 @@ select option{background:var(--bg2)}
         <div class="sec">Saved Speculations</div><div id="agent-saved-list"></div>
       </div>
       <div id="tab-statements" class="panel">
-        <div class="alert alert-blue"><span>&#128196;</span><div>Generate ready-to-file statements pre-filled with this veteran's records. Each document is specific to this veteran &mdash; not shared with others.</div></div>
+        <div class="alert alert-blue"><span>&#128196;</span><div>Generate ready-to-file statements pre-filled with this veteran\'s records. Each document is specific to this veteran &mdash; not shared with others.</div></div>
         <div class="card">
           <div class="igrid2">
             <div class="igroup"><label class="ilabel">Statement Type</label>
@@ -548,6 +548,7 @@ function selectWizardType(el){wizardData.type=el.textContent;el.parentElement.qu
 function selectWizardType(el){wizardData.type=el.textContent;el.parentElement.querySelectorAll("div").forEach(function(x){x.style.borderColor="var(--border)"});el.style.borderColor="var(--blue-b)"}
 function selectWizardType(el){wizardData.type=el.textContent;el.parentElement.querySelectorAll("div").forEach(function(x){x.style.borderColor="var(--border)"});el.style.borderColor="var(--blue-b)"}
 function selectWizardType(el){wizardData.type=el.textContent;el.parentElement.querySelectorAll("div").forEach(function(x){x.style.borderColor="var(--border)"});el.style.borderColor="var(--blue-b)"}
+function selectWizardType(el){wizardData.type=el.textContent;el.parentElement.querySelectorAll("div").forEach(function(x){x.style.borderColor="var(--border)"});el.style.borderColor="var(--blue-b)"}
 function renderWizard(){
   const prog=document.getElementById('wizard-progress');
   prog.innerHTML=WIZARD_STEPS.map((_,i)=>'<div class="wstep '+(i<wizardStep?'done':i===wizardStep?'active':'')+'"></div>').join('');
@@ -691,7 +692,7 @@ async function runStackAnalysis(){
   out.classList.add('open');
   inner.innerHTML='<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)"><div class="loading-dots"><span></span><span></span><span></span></div> Analyzing stacking for '+v.name+'...</div>';
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,system:'You are a VA stacking specialist. Analyze ONLY this veteran's specific conditions. Respond ONLY in JSON: {"canStack":[{"conditions":"string","reason":"string","cite":"string"}],"conflicts":[{"conditions":"string","issue":"string"}],"sequence":["Step 1: string"],"smcPath":"string","estimatedCombined":"XX%","backPayNote":"string","topRecommendation":"string"}',messages:[{role:'user',content:buildVetContext(v)+'
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,system:'You are a VA stacking specialist. Analyze ONLY this veteran\'s specific conditions. Respond ONLY in JSON: {"canStack":[{"conditions":"string","reason":"string","cite":"string"}],"conflicts":[{"conditions":"string","issue":"string"}],"sequence":["Step 1: string"],"smcPath":"string","estimatedCombined":"XX%","backPayNote":"string","topRecommendation":"string"}',messages:[{role:'user',content:buildVetContext(v)+'
 
 Selected conditions for stacking analysis: '+active+'
 
