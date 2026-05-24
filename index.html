@@ -451,7 +451,7 @@ function renderSidebar(){
   if(!veterans.length){list.innerHTML='<div style="padding:12px 14px;font-size:11px;color:var(--text3)">No veterans yet</div>';return}
   list.innerHTML=veterans.map(v=>{
     const[clr,bg]=avatarColor(v.id);
-    return '<div class="vet-entry '+(v.id===activeVetId?'active':'')+'" onclick="selectVet(''+v.id+'')"><div class="vet-avatar" style="background:'+bg+';color:'+clr+'">'+initials(v.name)+'</div><div class="vet-entry-info"><div class="vet-entry-name">'+v.name+'</div><div class="vet-entry-meta">'+v.branch+' &middot; '+(v.pt==='yes'?'P&T':v.combined+'%')+'</div></div><div class="vet-entry-pct" style="color:'+(v.pt==='yes'?'var(--green)':v.combined>=70?'var(--blue)':'var(--amber)')+'">'+v.combined+'%</div></div>';
+    return '<div class="vet-entry '+(v.id===activeVetId?'active':'')+'" onclick="selectVet('+v.id+')"><div class="vet-avatar" style="background:'+bg+';color:'+clr+'">'+initials(v.name)+'</div><div class="vet-entry-info"><div class="vet-entry-name">'+v.name+'</div><div class="vet-entry-meta">'+v.branch+' &middot; '+(v.pt==='yes'?'P&T':v.combined+'%')+'</div></div><div class="vet-entry-pct" style="color:'+(v.pt==='yes'?'var(--green)':v.combined>=70?'var(--blue)':'var(--amber)')+'">'+v.combined+'%</div></div>';
   }).join('');
 }
 function selectVet(id){activeVetId=id;localStorage.setItem('vso_active',id);renderSidebar();renderWorkspace()}
